@@ -59,6 +59,34 @@ If the reviewer senses something is wrong but cannot name what, the examination
 can return "requires human decision." That result cannot be folded into any
 other verdict.
 
+**Gray works in two phases, and the second one is what catches cross-cutting
+causes.** In the first phase Gray reads the architecture on its own, with no
+access to what Red found. Asking for Red's findings is what seals that phase:
+Gray cannot see them without first putting its own observations on the record.
+That keeps Red's framing of the problem from shaping Gray's structural read,
+which is the same reason Green runs after Red rather than before.
+
+In the second phase Gray can record a cross-cutting observation, which is one
+structural cause showing up in separate places. It has to name the cause, cite
+the findings, and span at least two distinct scopes. One that stays inside a
+single scope is same-scope accumulation, which is Red's clustering job.
+
+That division is deliberate. Red's 1/2/3 rule measures accumulation inside one
+scope, so unrelated findings that happen to sit near each other do not cluster.
+A cause that spans scopes is invisible to that rule by design, and it is Gray's
+to find.
+
+A cross-cutting observation never changes severity. Gray does not hold severity,
+because severity gates the failing verdict and holding it would give Gray a veto
+it was not granted.
+
+**Gray says what it concluded.** Before Gray closes it records whether the
+structure holds, is compromised, or could not be assessed, with a reason. If it
+closes without saying, the record says it could not assess rather than leaving a
+blank. This matters because the disagreement check used to read Gray's silence
+as agreement, which treated "looked and found nothing wrong" and "did not look"
+as the same state. They are not.
+
 **Green has to say where the analogy fails.** A grounding that only says where
 the comparison holds is incomplete and gets rejected. Green also has to declare
 whether an analogy is new or a repeat of one already used in this session, and
@@ -99,6 +127,10 @@ edited would make the history rewritable, which defeats the point of keeping it.
 
 `python3 example_pass.py` runs a complete worked pass, including a verdict that
 gets rejected and then corrected.
+
+`python3 example_cross_cutting.py` runs two-phase Gray against the three real
+defects found in v2.0.0, showing why Red's clustering cannot connect them and
+Gray can.
 
 `python3 example_provenance.py` runs the provenance side: origin, support links,
 a promotion that gets refused for lack of a human root, and an erasure cascade

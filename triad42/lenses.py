@@ -90,6 +90,78 @@ def normalize_key(key: str) -> str:
     return re.sub(r"[\s_\-]+", " ", key.strip().casefold())
 
 
+class StructuralAssessment(str, Enum):
+    """Gray's affirmative statement about the architecture.
+
+    Gray used to say nothing when it found nothing, and silence was read as
+    agreement. It is not: a lens that did not look and a lens that looked and
+    found nothing wrong are different states.
+    """
+
+    STRUCTURE_HOLDS = "STRUCTURE_HOLDS"
+    STRUCTURE_COMPROMISED = "STRUCTURE_COMPROMISED"
+    INSUFFICIENT_TO_ASSESS = "INSUFFICIENT_TO_ASSESS"
+
+
+@dataclass
+class CrossCuttingObservation:
+    """A single structural cause showing up across separate scopes.
+
+    This is Gray's job, not Red's. Red's clustering measures accumulation
+    inside one scope, deliberately, so unrelated findings that happen to sit
+    near each other do not cluster. A cause that spans scopes is invisible to
+    that rule by design, and asking Red to catch it would be asking Red to do
+    structural analysis.
+
+    Because of that division, a cross-cutting observation must span at least
+    two distinct scopes. One that does not is a same-scope accumulation, which
+    belongs to Red's cluster mechanism instead.
+
+    A cross-cutting observation never changes severity. Gray does not hold
+    severity, because severity gates the failing verdict and would give Gray a
+    veto it is not granted.
+    """
+
+    shared_cause: str
+    finding_ids: tuple[str, ...]
+    scopes: tuple[str, ...]
+    distinction: DistinctionKind = DistinctionKind.OTHER
+    observation_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    created_at: str = field(default_factory=utcnow)
+
+    def __post_init__(self) -> None:
+        if not self.shared_cause.strip():
+            raise IncompleteSubmission(
+                "A cross-cutting observation must name the shared cause. "
+                "Listing findings together is not an explanation of why they "
+                "belong together."
+            )
+        self.finding_ids = tuple(self.finding_ids)
+        self.scopes = tuple(sorted(set(self.scopes)))
+        if len(self.finding_ids) < 2:
+            raise IncompleteSubmission(
+                "A cross-cutting observation needs at least two findings."
+            )
+        if len(self.scopes) < 2:
+            raise IncompleteSubmission(
+                "A cross-cutting observation must span at least two distinct "
+                "scopes. Findings accumulating inside one scope are Red's "
+                "cluster mechanism, not a structural cause."
+            )
+        if not isinstance(self.distinction, DistinctionKind):
+            self.distinction = DistinctionKind(self.distinction)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "observation_id": self.observation_id,
+            "shared_cause": self.shared_cause,
+            "finding_ids": list(self.finding_ids),
+            "scopes": list(self.scopes),
+            "distinction": self.distinction.value,
+            "created_at": self.created_at,
+        }
+
+
 class GroundingStatus(str, Enum):
     NEW_GROUNDING = "NEW_GROUNDING"
     REAFFIRMATION = "REAFFIRMATION_OF_PRIOR_GROUNDING"

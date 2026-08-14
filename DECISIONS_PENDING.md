@@ -41,9 +41,11 @@ wrong. Green establishes real grounding. The framework says the mechanism is
 advisory, which implies the disagreement surfaces to a human, but it never
 says so.
 
-**Default chosen.** Disagreement routes to `REQUIRES_HUMAN_DECISION`. Declaring
-any other verdict over an active disagreement requires a written override that
-is stored in the record.
+**RESOLVED in 2.2.0.** Disagreement routes to `REQUIRES_HUMAN_DECISION`, and
+declaring any other verdict over an active disagreement requires a written
+override stored in the record. The detection rule is no longer crude: Gray now
+states whether the structure holds, so the check rests on an affirmative
+statement rather than on Gray having said nothing.
 
 **Alternatives considered.**
 - Red wins automatically, on the theory that an unrefuted objection stands.
@@ -58,12 +60,10 @@ is stored in the record.
 **Why this one.** It uses an output the framework already has, and it makes
 overriding possible but visible.
 
-**⚠️ This is the one most worth settling by hand.** The detection rule is
-currently crude: it fires when Red has blocking findings, Gray recorded nothing
-at all, and Green established at least one new grounding. Real disagreement is
-subtler than that, and a better rule would need Gray to say something
-affirmative about whether the structure holds rather than the harness reading
-Gray's silence as agreement.
+**What changed.** The original rule fired when Red had blocking findings, Gray
+recorded nothing at all, and Green established grounding. That conflated "Gray
+looked and found nothing wrong" with "Gray did not look". Gray's structural
+assessment replaces the inference with a statement.
 
 ---
 
@@ -126,10 +126,12 @@ and the answer will have to move.
 **The gap.** Red findings carry severity. Green groundings carry a status. Gray
 observations carry neither.
 
-**Default chosen.** No severity on Gray. Gray records observations, the
-distinction at stake, and where two overlapping rules should be consolidated,
-scoped, inherited, or kept separate. Keeping rules separate requires a stated
-reason, which is the framework's own rule.
+**RESOLVED in 2.2.0, and the answer is still no.** Gray records observations,
+cross-cutting causes, and an overall structural assessment. None of them carry
+severity. Gray does not hold severity because severity gates the failing
+verdict, and holding it would give Gray a veto the framework does not grant it.
+The assessment gives Gray an affirmative voice without giving it that veto,
+which is what question 2 needed.
 
 **Alternatives considered.**
 - Mirror Red's four tiers. Rejected because Red severity means "how much does
@@ -212,6 +214,31 @@ No cluster at any count produces an authorized conclusion.
 concepts. This is the second: explicitly scoped.
 
 ---
+
+## Added in 2.2.0: two-phase Gray
+
+The 2.1.0 fixes closed six defects. Three of them shared one cause, and nothing
+in the mechanism had found that: Red's clustering is scoped on purpose, so a
+cause spanning three subsystems is invisible to it.
+
+The first diagnosis was that the 1/2/3 rule was too narrow. That was wrong.
+Finding a cause that spans scopes is structural analysis, which is Gray's job,
+not Red's. Widening Red's scope rule would have made it worse at both jobs and
+would have been the category error Gray exists to catch.
+
+The actual gap was in the pipeline. Gray ran after Red and received nothing from
+it, so the component whose job this was had no access to the material.
+
+Gray now runs in two phases. It reads the architecture independently first, and
+requesting Red's findings is what seals that phase. It can then record
+cross-cutting observations, which must name a shared cause and span at least two
+scopes. Nothing Gray does changes severity.
+
+**The risk this accepts.** Stage order exists so one lens does not inherit
+another's framing. Handing Red's findings to Gray runs that risk in reverse.
+Sealing phase 1 on request is the mitigation, not a cure: Gray's independent
+work is on the record before it sees anything, but its second phase is still
+working inside Red's framing.
 
 ## Fixed in 2.1.0, found by adversarial review of 2.0.0
 

@@ -535,10 +535,15 @@ def test_verdict_requires_a_reason():
 
 
 def test_component_disagreement_routes_to_human_by_default():
+    """Red objects while Gray affirms the structure and Green grounds it."""
+    from triad42 import StructuralAssessment
+
     rp = ReviewPass(subject=subject())
     rp.add_finding("Unsupported claim", Severity.HIGH, "evidence")
     rp.close_stage()  # red
-    rp.close_stage()  # gray, no observations
+    rp.assess_structure(StructuralAssessment.STRUCTURE_HOLDS,
+                        "No boundary or authority problem found.")
+    rp.close_stage()  # gray
     rp.add_grounding(Grounding(
         analogy_key="bridge-load-test",
         real_system="structural load testing",
@@ -604,3 +609,200 @@ def test_session_serializes_all_passes():
         rp.declare(Verdict.NO_BLOCKING_FINDINGS, "clean")
     data = json.loads(session.to_json())
     assert len(data["passes"]) == 2
+
+
+def test_gray_silence_is_not_agreement():
+    """Gray closing without an assessment must not read as endorsement."""
+    from triad42 import StructuralAssessment
+
+    rp = ReviewPass(subject=subject())
+    rp.add_finding("Unsupported claim", Severity.HIGH, "evidence")
+    rp.close_stage()  # red
+    rp.close_stage()  # gray, nothing said
+    assert rp.structural_assessment is StructuralAssessment.INSUFFICIENT_TO_ASSESS
+    rp.add_grounding(Grounding(
+        analogy_key="silence-test",
+        real_system="some system",
+        where_it_holds="holds",
+        where_it_breaks="breaks",
+    ))
+    rp.close_stage()
+    rp.close_stage()
+    # No disagreement is claimed, because Gray never affirmed anything.
+    assert rp.declare(Verdict.FAILS, "red stands") is Verdict.FAILS
+
+
+# --------------------------------------------------------------------------
+# two-phase Gray
+# --------------------------------------------------------------------------
+
+
+def _pass_with_findings():
+    """A pass where Red found three defects across three different scopes."""
+    rp = ReviewPass(subject=subject())
+    a = rp.add_finding("Guard sits above the object it guards", Severity.HIGH,
+                       "provenance")
+    b = rp.add_finding("Guard sits above the object it guards", Severity.HIGH,
+                       "findings")
+    c = rp.add_finding("Guard sits above the object it guards", Severity.MEDIUM,
+                       "review")
+    rp.close_stage()
+    return rp, (a, b, c)
+
+
+def test_gray_cannot_see_red_findings_before_committing_its_own():
+    from triad42 import CrossCuttingObservation
+
+    rp, (a, b, _) = _pass_with_findings()
+    with pytest.raises(StageOrderError):
+        rp.add_cross_cutting(CrossCuttingObservation(
+            shared_cause="premature",
+            finding_ids=(a.finding_id, b.finding_id),
+            scopes=("provenance", "findings"),
+        ))
+
+
+def test_requesting_findings_seals_grays_independent_phase():
+    rp, _ = _pass_with_findings()
+    rp.add_observation(StructuralObservation(
+        text="Authority and capability are conflated", scope="governance"))
+    assert rp.gray_phase == 1
+    rp.red_findings_for_gray()
+    assert rp.gray_phase == 2
+    with pytest.raises(StageOrderError):
+        rp.add_observation(StructuralObservation(text="late", scope="governance"))
+
+
+def test_cross_cutting_observation_spanning_scopes_is_accepted():
+    from triad42 import CrossCuttingObservation, DistinctionKind
+
+    rp, (a, b, c) = _pass_with_findings()
+    rp.red_findings_for_gray()
+    cc = rp.add_cross_cutting(CrossCuttingObservation(
+        shared_cause=(
+            "Every guard is implemented at the convenience method while the "
+            "object it guards stays publicly mutable."
+        ),
+        finding_ids=(a.finding_id, b.finding_id, c.finding_id),
+        scopes=("provenance", "findings", "review"),
+        distinction=DistinctionKind.AUTHORITY_CAPABILITY_EXECUTION,
+    ))
+    assert len(cc.scopes) == 3
+    assert rp.cross_cutting == (cc,)
+
+
+def test_cross_cutting_within_one_scope_is_rejected():
+    """Same-scope accumulation is Red's cluster mechanism, not Gray's."""
+    from triad42 import CrossCuttingObservation
+
+    with pytest.raises(IncompleteSubmission):
+        CrossCuttingObservation(
+            shared_cause="all in one place",
+            finding_ids=("a", "b"),
+            scopes=("auth", "auth"),
+        )
+
+
+def test_cross_cutting_needs_at_least_two_findings():
+    from triad42 import CrossCuttingObservation
+
+    with pytest.raises(IncompleteSubmission):
+        CrossCuttingObservation(
+            shared_cause="lonely", finding_ids=("a",), scopes=("x", "y"))
+
+
+def test_cross_cutting_must_name_the_cause():
+    from triad42 import CrossCuttingObservation
+
+    with pytest.raises(IncompleteSubmission):
+        CrossCuttingObservation(
+            shared_cause="   ", finding_ids=("a", "b"), scopes=("x", "y"))
+
+
+def test_cross_cutting_cannot_cite_findings_that_do_not_exist():
+    from triad42 import CrossCuttingObservation
+
+    rp, (a, _, _) = _pass_with_findings()
+    rp.red_findings_for_gray()
+    with pytest.raises(IncompleteSubmission):
+        rp.add_cross_cutting(CrossCuttingObservation(
+            shared_cause="invented",
+            finding_ids=(a.finding_id, "deadbeef1234"),
+            scopes=("provenance", "findings"),
+        ))
+
+
+def test_cross_cutting_scopes_must_match_the_cited_findings():
+    from triad42 import CrossCuttingObservation
+
+    rp, (a, b, _) = _pass_with_findings()
+    rp.red_findings_for_gray()
+    with pytest.raises(IncompleteSubmission):
+        rp.add_cross_cutting(CrossCuttingObservation(
+            shared_cause="mismatched",
+            finding_ids=(a.finding_id, b.finding_id),
+            scopes=("provenance", "some-other-place"),
+        ))
+
+
+def test_cross_cutting_does_not_change_severity():
+    """Gray holds no severity, because severity gates the failing verdict."""
+    from triad42 import CrossCuttingObservation
+
+    rp, (a, b, c) = _pass_with_findings()
+    before = [f.severity for f in rp.red.findings]
+    rp.red_findings_for_gray()
+    rp.add_cross_cutting(CrossCuttingObservation(
+        shared_cause="one architectural defect in three places",
+        finding_ids=(a.finding_id, b.finding_id, c.finding_id),
+        scopes=("provenance", "findings", "review"),
+    ))
+    assert [f.severity for f in rp.red.findings] == before
+
+
+def test_structural_assessment_requires_a_reason():
+    from triad42 import StructuralAssessment
+
+    rp, _ = _pass_with_findings()
+    with pytest.raises(IncompleteSubmission):
+        rp.assess_structure(StructuralAssessment.STRUCTURE_HOLDS, "  ")
+
+
+def test_cross_cutting_and_assessment_appear_in_the_record():
+    from triad42 import CrossCuttingObservation, StructuralAssessment
+
+    rp, (a, b, c) = _pass_with_findings()
+    rp.add_observation(StructuralObservation(
+        text="Independent read", scope="governance"))
+    rp.red_findings_for_gray()
+    rp.add_cross_cutting(CrossCuttingObservation(
+        shared_cause="one cause, three scopes",
+        finding_ids=(a.finding_id, b.finding_id, c.finding_id),
+        scopes=("provenance", "findings", "review"),
+    ))
+    rp.assess_structure(StructuralAssessment.STRUCTURE_COMPROMISED,
+                        "A single defect spans three subsystems.")
+    rp.close_stage()
+    rp.close_stage()
+    rp.close_stage()
+    rp.declare(Verdict.FAILS, "blocking findings stand")
+
+    d = json.loads(rp.to_json())
+    assert d["gray_phase"] == 2
+    assert len(d["gray"]) == 1
+    assert len(d["cross_cutting"]) == 1
+    assert d["cross_cutting"][0]["scopes"] == ["findings", "provenance", "review"]
+    assert d["structural_assessment"] == "STRUCTURE_COMPROMISED"
+    assert d["assessment_reason"]
+
+
+def test_gray_may_stay_single_phase():
+    """A pass that never requests the findings behaves exactly as before."""
+    rp = ReviewPass(subject=subject())
+    rp.close_stage()
+    rp.add_observation(StructuralObservation(text="obs", scope="s"))
+    assert rp.gray_phase == 1
+    rp.close_stage()
+    rp.close_stage()
+    rp.close_stage()
+    assert rp.declare(Verdict.NO_BLOCKING_FINDINGS, "clean")

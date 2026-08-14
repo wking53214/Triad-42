@@ -44,11 +44,13 @@ from .findings import (
     Severity,
 )
 from .lenses import (
+    CrossCuttingObservation,
     DistinctionKind,
     Disposition,
     Grounding,
     GroundingLedger,
     GroundingStatus,
+    StructuralAssessment,
     StructuralObservation,
     normalize_key,
 )
@@ -72,7 +74,7 @@ from .provenance import (
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 from .review import ReviewPass, Session, Stage, Verdict
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 __all__ = [
     "Candidate",
@@ -92,6 +94,8 @@ __all__ = [
     "RootTrace",
     "SupportLink",
     "SurfacingStatus",
+    "CrossCuttingObservation",
+    "StructuralAssessment",
     "normalize_key",
     "ANOMALY",
     "MANDATE",

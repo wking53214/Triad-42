@@ -32,7 +32,13 @@ from .findings import (
     Severity,
     ExaminationOutcome,
 )
-from .lenses import Grounding, GroundingLedger, StructuralObservation
+from .lenses import (
+    CrossCuttingObservation,
+    Grounding,
+    GroundingLedger,
+    StructuralAssessment,
+    StructuralObservation,
+)
 from .provenance import Origin, ProvenanceGraph
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 
@@ -81,6 +87,10 @@ class ReviewPass:
 
         self.red = FindingLedger()
         self._gray: list[StructuralObservation] = []
+        self._cross_cutting: list[CrossCuttingObservation] = []
+        self._gray_phase = 1
+        self.structural_assessment: Optional[StructuralAssessment] = None
+        self.assessment_reason: Optional[str] = None
         self.green = GroundingLedger()
         self.deep_thought: Optional[GateRecord] = None
 
@@ -98,6 +108,16 @@ class ReviewPass:
     def gray(self) -> tuple[StructuralObservation, ...]:
         """Read-only. Observations go in through add_observation()."""
         return tuple(self._gray)
+
+    @property
+    def cross_cutting(self) -> tuple[CrossCuttingObservation, ...]:
+        """Read-only. Cross-cutting observations go in through add_cross_cutting()."""
+        return tuple(self._cross_cutting)
+
+    @property
+    def gray_phase(self) -> int:
+        """1 while Gray works independently, 2 once it has seen Red's findings."""
+        return self._gray_phase
 
     @property
     def current_stage(self) -> Optional[Stage]:
@@ -123,8 +143,11 @@ class ReviewPass:
         if stage is Stage.RED:
             self.red.assert_mandates_closed()
             self.red.seal()
-        if stage is Stage.GRAY:
-            self._gray_sealed = True
+        if stage is Stage.GRAY and self.structural_assessment is None:
+            # Same shape as 42 defaulting to NO 42 IDENTIFIED: when nothing was
+            # established, the honest record says so rather than staying blank.
+            self.structural_assessment = StructuralAssessment.INSUFFICIENT_TO_ASSESS
+            self.assessment_reason = "No assessment was recorded before Gray closed."
         if stage is Stage.GREEN:
             self.green.seal()
         if stage is Stage.DEEP_THOUGHT and self.deep_thought is None:
@@ -144,9 +167,67 @@ class ReviewPass:
         return self.red.examine(scope, severity, outcome, **kwargs)
 
     def add_observation(self, observation: StructuralObservation) -> StructuralObservation:
+        """Phase 1. Gray's independent read of the architecture."""
         self._require(Stage.GRAY)
+        if self._gray_phase != 1:
+            raise StageOrderError(
+                "Gray's independent phase closed when Red's findings were "
+                "requested. An observation made after seeing the findings is "
+                "not independent of them; record it as a cross-cutting "
+                "observation instead."
+            )
         self._gray.append(observation)
         return observation
+
+    def red_findings_for_gray(self) -> tuple[Finding, ...]:
+        """Hand Red's findings to Gray, sealing Gray's independent phase.
+
+        Requesting the findings is what commits Gray's own work. Gray cannot
+        see what Red found without first putting on the record what it found
+        without them, which is what keeps Red's framing from shaping Gray's
+        structural read.
+        """
+        self._require(Stage.GRAY)
+        self._gray_phase = 2
+        return tuple(self.red.findings)
+
+    def add_cross_cutting(
+        self, observation: CrossCuttingObservation
+    ) -> CrossCuttingObservation:
+        """Phase 2. One structural cause appearing across separate scopes."""
+        self._require(Stage.GRAY)
+        if self._gray_phase != 2:
+            raise StageOrderError(
+                "Cross-cutting observations belong to Gray's second phase. "
+                "Call red_findings_for_gray() first, which seals the "
+                "independent observations you have already made."
+            )
+        known = {f.finding_id: f for f in self.red.findings}
+        missing = [fid for fid in observation.finding_ids if fid not in known]
+        if missing:
+            raise IncompleteSubmission(
+                f"Cross-cutting observation cites findings not on the record: "
+                f"{missing}."
+            )
+        actual = {known[fid].scope for fid in observation.finding_ids}
+        if not set(observation.scopes) <= actual:
+            raise IncompleteSubmission(
+                f"Declared scopes {sorted(observation.scopes)} do not match "
+                f"the scopes of the cited findings {sorted(actual)}."
+            )
+        self._cross_cutting.append(observation)
+        return observation
+
+    def assess_structure(
+        self, assessment: StructuralAssessment, reason: str
+    ) -> StructuralAssessment:
+        """Gray's affirmative conclusion. Required before Gray closes."""
+        self._require(Stage.GRAY)
+        if not reason.strip():
+            raise IncompleteSubmission("A structural assessment requires a reason.")
+        self.structural_assessment = StructuralAssessment(assessment)
+        self.assessment_reason = reason
+        return self.structural_assessment
 
     def add_grounding(self, grounding: Grounding) -> Grounding:
         self._require(Stage.GREEN)
@@ -164,11 +245,16 @@ class ReviewPass:
         return len(self._closed_stages) == len(STAGE_ORDER)
 
     def _disagreement(self) -> bool:
-        """Red says stop, Gray and Green say the structure holds."""
+        """Red says stop while Gray and Green say the thing holds.
+
+        This used to read Gray's silence as agreement, which conflated "looked
+        and found nothing wrong" with "did not look". Gray now says which one
+        it is, so the check rests on a statement rather than an absence.
+        """
         red_objects = bool(self.red.blocking_findings())
-        gray_clean = not self.gray
+        gray_affirms = self.structural_assessment is StructuralAssessment.STRUCTURE_HOLDS
         green_grounded = self.green.new_grounding_count() > 0
-        return red_objects and gray_clean and green_grounded
+        return red_objects and gray_affirms and green_grounded
 
     def declare(
         self,
@@ -263,6 +349,14 @@ class ReviewPass:
             "stages_closed": [s.value for s in self._closed_stages],
             "red": self.red.to_dict(),
             "gray": [o.to_dict() for o in self._gray],
+            "gray_phase": self._gray_phase,
+            "cross_cutting": [o.to_dict() for o in self._cross_cutting],
+            "structural_assessment": (
+                self.structural_assessment.value
+                if self.structural_assessment
+                else None
+            ),
+            "assessment_reason": self.assessment_reason,
             "green": self.green.to_dict(),
             "deep_thought": self.deep_thought.to_dict() if self.deep_thought else None,
             "created_at": self.created_at,
