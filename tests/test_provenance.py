@@ -331,3 +331,153 @@ def test_provenance_export_marks_erased_and_root_erased():
     by_id = {i["item_id"]: i for i in data["items"]}
     assert by_id[root.item_id]["erased"] is True
     assert by_id[dep.item_id]["root_erased"] is True
+
+
+# --------------------------------------------------------------------------
+# regressions: the six defects found by adversarial review of v2.0.0
+# --------------------------------------------------------------------------
+
+
+def test_relabel_cannot_bypass_the_human_root_requirement():
+    """v2.0.0 defect: promote_to_fact was guarded, relabel() was not."""
+    g = ProvenanceGraph()
+    a = g.register(item("machine 1"), Origin.MACHINE_DERIVED)
+    b = g.register(item("machine 2"), Origin.MACHINE_DERIVED)
+    g.add_support(a.item_id, b.item_id, "a backs b")
+    with pytest.raises(EpistemicViolation):
+        b.relabel(Label.FACT, auth("bypass attempt"))
+    assert b.label is Label.INFERENCE
+    assert g.zombie_check() == []
+
+
+def test_guard_permits_relabel_when_a_human_root_exists():
+    g = ProvenanceGraph()
+    root = g.register(item("I observed it", Label.FACT), Origin.USER_ESTABLISHED)
+    inf = g.register(item("therefore X"), Origin.MACHINE_DERIVED)
+    g.add_support(root.item_id, inf.item_id, "the observation is the basis")
+    inf.relabel(Label.FACT, auth("confirmed"))
+    assert inf.label is Label.FACT
+
+
+def test_guard_does_not_block_downward_relabel():
+    g = ProvenanceGraph()
+    a = g.register(item("claim"), Origin.MACHINE_DERIVED)
+    a.relabel(Label.UNKNOWN, auth("withdrawing confidence"))
+    assert a.label is Label.UNKNOWN
+
+
+def test_unregistered_items_are_unaffected_by_the_guard():
+    loose = item("not in any graph")
+    loose.relabel(Label.FACT, auth("standalone use"))
+    assert loose.label is Label.FACT
+
+
+def test_red_ledger_seals_when_the_stage_closes():
+    """v2.0.0 defect: rp.red.add() bypassed the stage-order check."""
+    from triad42.findings import Finding
+    from triad42.errors import StageOrderError
+
+    rp = Session().start_pass(item("subject", Label.ASSUMPTION))
+    rp.close_stage()
+    with pytest.raises(StageOrderError):
+        rp.red.add(Finding("injected", Severity.HIGH, "scope"))
+    assert rp.red.blocking_findings() == []
+
+
+def test_gray_is_read_only_from_outside():
+    """v2.0.0 defect: rp.gray was a mutable public list."""
+    rp = Session().start_pass(item("subject", Label.ASSUMPTION))
+    assert isinstance(rp.gray, tuple)
+    with pytest.raises(AttributeError):
+        rp.gray.append("smuggled in")
+
+
+def test_green_ledger_seals_when_the_stage_closes():
+    from triad42 import Grounding, Stage
+    from triad42.errors import StageOrderError
+
+    rp = Session().start_pass(item("subject", Label.ASSUMPTION))
+    while rp.current_stage is not Stage.GREEN:
+        rp.close_stage()
+    rp.close_stage()
+    with pytest.raises(StageOrderError):
+        rp.green.add(Grounding("k", "sys", "holds", "breaks"))
+
+
+def test_verdicts_are_write_once():
+    """v2.0.0 defect: a second declare() silently overwrote the first."""
+    from triad42.errors import InadmissibleVerdict
+
+    rp = Session().start_pass(item("subject", Label.ASSUMPTION))
+    for _ in range(4):
+        rp.close_stage()
+    rp.declare(Verdict.NO_BLOCKING_FINDINGS, "clean")
+    with pytest.raises(InadmissibleVerdict):
+        rp.declare(Verdict.REQUIRES_HUMAN_DECISION, "changed my mind")
+    assert rp.verdict is Verdict.NO_BLOCKING_FINDINGS
+
+
+def test_analogy_keys_are_normalized():
+    """v2.0.0 defect: a hyphen defeated reaffirmation detection."""
+    from triad42 import Grounding, GroundingError, Stage
+
+    session = Session()
+    p1 = session.start_pass(item("s1", Label.ASSUMPTION))
+    while p1.current_stage is not Stage.GREEN:
+        p1.close_stage()
+    p1.add_grounding(Grounding("immune-system", "immune response", "holds", "breaks"))
+    p1.close_stage()
+    p1.close_stage()
+
+    p2 = session.start_pass(item("s2", Label.ASSUMPTION))
+    while p2.current_stage is not Stage.GREEN:
+        p2.close_stage()
+    with pytest.raises(GroundingError):
+        p2.add_grounding(Grounding("Immune  System", "immune response", "a", "b"))
+
+
+def test_normalize_key_folds_common_variants():
+    from triad42 import normalize_key
+
+    forms = ["immune-system", "immune system", "Immune_System", "  IMMUNE   SYSTEM "]
+    assert len({normalize_key(f) for f in forms}) == 1
+
+
+def test_start_pass_does_not_swallow_errors():
+    """v2.0.0 defect: a bare except hid genuine registration failures."""
+    import inspect
+
+    assert "except Exception:" not in inspect.getsource(Session.start_pass)
+
+
+def test_repeated_subject_registers_once_without_error():
+    session = Session()
+    subj = item("shared subject", Label.ASSUMPTION)
+    session.start_pass(subj, subject_origin=Origin.USER_ESTABLISHED)
+    session.start_pass(subj, subject_origin=Origin.USER_ESTABLISHED)
+    assert session.graph.origin_of(subj.item_id) is Origin.USER_ESTABLISHED
+
+
+def test_records_carry_timestamps():
+    """v2.0.0 defect: nothing recorded when anything happened."""
+    session = Session()
+    rp = session.start_pass(item("subject", Label.ASSUMPTION))
+    f = rp.add_finding("a finding", Severity.LOW, "scope")
+    for _ in range(4):
+        rp.close_stage()
+    rp.declare(Verdict.NO_BLOCKING_FINDINGS, "clean")
+    session.harvest(rp)
+
+    d = rp.to_dict()
+    assert d["created_at"] and d["declared_at"]
+    assert d["red"]["findings"][0]["created_at"]
+    assert f.created_at
+    assert session.to_dict()["created_at"]
+    assert session.candidates.all()[0].recorded_at
+
+
+def test_erasure_event_is_timestamped():
+    g = ProvenanceGraph()
+    a = g.register(item("root", Label.FACT), Origin.USER_ESTABLISHED)
+    event = g.erase(a.item_id, "William", "retracted")
+    assert event.erased_at

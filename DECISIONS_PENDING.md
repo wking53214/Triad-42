@@ -213,6 +213,31 @@ concepts. This is the second: explicitly scoped.
 
 ---
 
+## Fixed in 2.1.0, found by adversarial review of 2.0.0
+
+Six defects, all confirmed by working attacks before the fix and blocked by
+tests after it.
+
+- **The human-root requirement was bypassable in one line.** Promotion to fact
+  was guarded; relabelling directly was not. The graph now installs a guard on
+  every item it registers, so the check applies by any route. The guard blocks
+  upward moves only, which keeps the erasure cascade working.
+- **Findings could be added after the stage closed.** The stage check sat on
+  the convenience method while the ledger stayed open. Ledgers now seal when
+  their stage closes, and the same applies to Green.
+- **Gray observations were a mutable public list.** Now read-only from outside.
+- **Verdicts could be re-declared,** overwriting the first with no trace. The
+  record is now write-once.
+- **A hyphen defeated reaffirmation detection.** Analogy keys are normalized
+  for case, spacing, hyphens, and underscores.
+- **No record carried a timestamp,** which made the output unusable as a ledger
+  entry. Every record now carries its creation time, and verdicts carry the
+  moment they were declared.
+
+The common cause of the first three: every guard was implemented at the
+convenience method while the object it guarded stayed publicly mutable. Worth
+remembering as a shape rather than three separate bugs.
+
 ## Known limitations, recorded rather than fixed
 
 - **Escalation is now the cheap path.** Inverting the burden at three findings

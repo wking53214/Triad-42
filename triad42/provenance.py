@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Any, Iterable, Optional
 import uuid
 
+from ._clock import utcnow
 from .epistemic import Authorization, Label, LabeledItem
 from .errors import EpistemicViolation, IncompleteSubmission
 
@@ -53,6 +54,7 @@ class SupportLink:
     target_id: str
     reason: str
     link_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    created_at: str = field(default_factory=utcnow)
 
     def __post_init__(self) -> None:
         if self.source_id == self.target_id:
@@ -69,6 +71,7 @@ class SupportLink:
             "source_id": self.source_id,
             "target_id": self.target_id,
             "reason": self.reason,
+            "created_at": self.created_at,
         }
 
 
@@ -107,6 +110,7 @@ class ErasureEvent:
     reason: str
     downgrades: list[dict[str, str]] = field(default_factory=list)
     flagged: list[str] = field(default_factory=list)
+    erased_at: str = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -115,6 +119,7 @@ class ErasureEvent:
             "reason": self.reason,
             "downgrades": list(self.downgrades),
             "flagged": list(self.flagged),
+            "erased_at": self.erased_at,
         }
 
 
@@ -148,7 +153,30 @@ class ProvenanceGraph:
         self._origins[item.item_id] = origin
         if item.label is Label.FACT:
             self._assert_fact_admissible(item.item_id)
+        item.promotion_guard = self._guard
         return item
+
+    def has(self, item_id: str) -> bool:
+        return item_id in self._items
+
+    def _guard(self, item: LabeledItem, new_label: Label) -> None:
+        """Consulted on every relabel of a registered item.
+
+        Without this, the human-root requirement could be sidestepped simply
+        by calling relabel() instead of promote_to_fact().
+        """
+        if new_label is not Label.FACT:
+            return
+        origin = self._origins.get(item.item_id)
+        if origin in HUMAN_ROOTS or origin is Origin.EXTERNAL_SOURCE:
+            return
+        if not self.trace(item.item_id).reaches_human_root:
+            raise EpistemicViolation(
+                f"{origin.value if origin else 'Unregistered'} material cannot "
+                "be relabelled to FACT without a support chain terminating in "
+                "human-originated material. Machine reasoning does not "
+                "bootstrap itself into evidence by any route."
+            )
 
     def origin_of(self, item_id: str) -> Origin:
         self._require(item_id)
@@ -285,7 +313,6 @@ class ProvenanceGraph:
         """Raise a claim to FACT. Requires both a human root and authorization."""
         self._require(item_id)
         item = self._items[item_id]
-        self._origins[item_id] = self._origins[item_id]
         trace = self.trace(item_id)
         origin = self._origins[item_id]
         if origin not in HUMAN_ROOTS and origin is not Origin.EXTERNAL_SOURCE:
@@ -342,7 +369,7 @@ class ProvenanceGraph:
                     },
                 }
             )
-            dep.label = new_label
+            dep.label = new_label  # direct: the guard only blocks upward moves
             event.downgrades.append(
                 {"item_id": dependent_id, "from": "FACT", "to": new_label.value}
             )

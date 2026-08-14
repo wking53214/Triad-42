@@ -18,6 +18,7 @@ from typing import Any, Optional
 import json
 import uuid
 
+from ._clock import utcnow
 from .deepthought import GateRecord, DeepThoughtResult, no_candidate
 from .epistemic import LabeledItem, Label
 from .errors import (
@@ -79,10 +80,12 @@ class ReviewPass:
                 )
 
         self.red = FindingLedger()
-        self.gray: list[StructuralObservation] = []
+        self._gray: list[StructuralObservation] = []
         self.green = GroundingLedger()
         self.deep_thought: Optional[GateRecord] = None
 
+        self.created_at = utcnow()
+        self.declared_at: Optional[str] = None
         self._stage_index = 0
         self._closed_stages: list[Stage] = []
         self.verdict: Optional[Verdict] = None
@@ -90,6 +93,11 @@ class ReviewPass:
         self.disagreement_override: Optional[str] = None
 
     # -- stage sequencing ------------------------------------------------
+
+    @property
+    def gray(self) -> tuple[StructuralObservation, ...]:
+        """Read-only. Observations go in through add_observation()."""
+        return tuple(self._gray)
 
     @property
     def current_stage(self) -> Optional[Stage]:
@@ -114,6 +122,11 @@ class ReviewPass:
             raise StageOrderError("All stages are already closed.")
         if stage is Stage.RED:
             self.red.assert_mandates_closed()
+            self.red.seal()
+        if stage is Stage.GRAY:
+            self._gray_sealed = True
+        if stage is Stage.GREEN:
+            self.green.seal()
         if stage is Stage.DEEP_THOUGHT and self.deep_thought is None:
             self.deep_thought = no_candidate()
         self._closed_stages.append(stage)
@@ -132,7 +145,7 @@ class ReviewPass:
 
     def add_observation(self, observation: StructuralObservation) -> StructuralObservation:
         self._require(Stage.GRAY)
-        self.gray.append(observation)
+        self._gray.append(observation)
         return observation
 
     def add_grounding(self, grounding: Grounding) -> Grounding:
@@ -171,6 +184,12 @@ class ReviewPass:
             raise StageOrderError(
                 f"A verdict cannot be declared with stages open: {remaining}."
             )
+        if self.verdict is not None:
+            raise InadmissibleVerdict(
+                f"A verdict was already declared for this pass "
+                f"({self.verdict.value}). The record is write-once: a second "
+                "declaration would overwrite it with no trace of the first."
+            )
         verdict = Verdict(verdict)
         if not reason.strip():
             raise IncompleteSubmission("A verdict requires a stated reason.")
@@ -208,6 +227,7 @@ class ReviewPass:
 
         self.verdict = verdict
         self.verdict_reason = reason
+        self.declared_at = utcnow()
         return verdict
 
     # -- outputs ----------------------------------------------------------
@@ -242,9 +262,11 @@ class ReviewPass:
             "inputs": [i.to_dict() for i in self.inputs],
             "stages_closed": [s.value for s in self._closed_stages],
             "red": self.red.to_dict(),
-            "gray": [o.to_dict() for o in self.gray],
+            "gray": [o.to_dict() for o in self._gray],
             "green": self.green.to_dict(),
             "deep_thought": self.deep_thought.to_dict() if self.deep_thought else None,
+            "created_at": self.created_at,
+            "declared_at": self.declared_at,
             "verdict": self.verdict.value if self.verdict else None,
             "verdict_reason": self.verdict_reason,
             "disagreement_override": self.disagreement_override,
@@ -267,6 +289,7 @@ class Session:
     """
 
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    created_at: str = field(default_factory=utcnow)
     passes: list[ReviewPass] = field(default_factory=list)
     graph: ProvenanceGraph = field(default_factory=ProvenanceGraph)
     candidates: CandidateStore = field(default_factory=CandidateStore)
@@ -282,10 +305,8 @@ class Session:
             carried.append(item.carry_forward(self.session_id))
         rp = ReviewPass(subject=subject, inputs=carried)
         rp.green.seed_prior_keys(self.analogy_keys())
-        try:
+        if not self.graph.has(subject.item_id):
             self.graph.register(subject, subject_origin)
-        except Exception:
-            pass  # already registered from a prior pass
         self.passes.append(rp)
         return rp
 
@@ -369,6 +390,7 @@ class Session:
     def to_dict(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
+            "created_at": self.created_at,
             "passes": [p.to_dict() for p in self.passes],
             "provenance": self.graph.to_dict(),
             "candidates": self.candidates.to_dict(),

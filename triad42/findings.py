@@ -13,7 +13,13 @@ from enum import Enum
 from typing import Any, Optional
 import uuid
 
-from .errors import EscalationError, IncompleteSubmission, UnexaminedMandate
+from ._clock import utcnow
+from .errors import (
+    EscalationError,
+    IncompleteSubmission,
+    StageOrderError,
+    UnexaminedMandate,
+)
 
 
 class Severity(str, Enum):
@@ -94,6 +100,7 @@ class Finding:
     finding_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     derived_from: list[str] = field(default_factory=list)
     escalation_cause: Optional[str] = None
+    created_at: str = field(default_factory=utcnow)
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -122,6 +129,7 @@ class Finding:
             "scope": self.scope,
             "derived_from": list(self.derived_from),
             "escalation_cause": self.escalation_cause,
+            "created_at": self.created_at,
         }
 
     @classmethod
@@ -196,6 +204,7 @@ class Examination:
     independent_origins: dict[str, str] = field(default_factory=dict)
     reasoning: Optional[str] = None
     produced_finding_id: Optional[str] = None
+    examined_at: str = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -207,6 +216,7 @@ class Examination:
             "independent_origins": dict(self.independent_origins),
             "reasoning": self.reasoning,
             "produced_finding_id": self.produced_finding_id,
+            "examined_at": self.examined_at,
         }
 
 
@@ -225,10 +235,28 @@ class FindingLedger:
         self._findings: dict[str, Finding] = {}
         self._examinations: list[Examination] = []
         self._examined_keys: set[tuple[str, str, tuple[str, ...]]] = set()
+        self._sealed = False
+
+    def seal(self) -> None:
+        """Close the ledger. Nothing may be added or examined afterwards."""
+        self._sealed = True
+
+    @property
+    def sealed(self) -> bool:
+        return self._sealed
+
+    def _assert_open(self, action: str) -> None:
+        if self._sealed:
+            raise StageOrderError(
+                f"Cannot {action}: the Red ledger was sealed when the stage "
+                "closed. A finding added after the fact would change verdict "
+                "admissibility without appearing in the stage record."
+            )
 
     # -- submission -----------------------------------------------------
 
     def add(self, finding: Finding) -> Finding:
+        self._assert_open("add a finding")
         self._findings[finding.finding_id] = finding
         return finding
 
@@ -279,6 +307,7 @@ class FindingLedger:
         reasoning: Optional[str] = None,
     ) -> Examination:
         """Record an examination of the cluster at (scope, severity)."""
+        self._assert_open("examine a cluster")
         severity = Severity(severity)
         outcome = ExaminationOutcome(outcome)
         cluster = self._require_cluster(scope, severity)

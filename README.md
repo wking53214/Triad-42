@@ -186,6 +186,15 @@ that assigns severity holds veto power. The Red interface therefore returns
 findings without severity, and four questions are written into that module that
 have to be answered before anything fills the slot.
 
+## Records are write-once
+
+Ledgers seal when their stage closes, so nothing can be added to Red after Red
+is done. Verdicts can be declared once. Every record carries the time it was
+created, and a verdict carries the time it was declared.
+
+None of this was true in 2.0.0. All of it came out of an adversarial pass that
+found six ways to get around the rules, which are now regression tests.
+
 ## What is still open
 
 Five design questions were answered with defaults rather than decisions. They

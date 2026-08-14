@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 import uuid
 
+from ._clock import utcnow
 from .errors import EpistemicViolation, IncompleteSubmission
 
 
@@ -66,6 +67,12 @@ class LabeledItem:
     item_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     origin_pass: Optional[str] = None
     label_history: list[dict[str, Any]] = field(default_factory=list)
+    created_at: str = field(default_factory=utcnow)
+    #: Set by ProvenanceGraph.register. Consulted on every label change so the
+    #: human-root requirement cannot be sidestepped by relabelling directly.
+    promotion_guard: Optional[Callable[["LabeledItem", "Label"], None]] = field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -82,11 +89,14 @@ class LabeledItem:
                 "authorization. Labels do not upgrade through review."
             )
         new_label = Label(new_label)
+        if self.promotion_guard is not None:
+            self.promotion_guard(self, new_label)
         self.label_history.append(
             {
                 "from": self.label.value,
                 "to": new_label.value,
                 "authorization": authorization.to_dict(),
+                "at": utcnow(),
             }
         )
         self.label = new_label
@@ -107,6 +117,7 @@ class LabeledItem:
             "text": self.text,
             "label": self.label.value,
             "origin_pass": self.origin_pass,
+            "created_at": self.created_at,
             "label_history": list(self.label_history),
         }
 
@@ -117,5 +128,6 @@ class LabeledItem:
             label=Label(data["label"]),
             item_id=data["item_id"],
             origin_pass=data.get("origin_pass"),
+            created_at=data.get("created_at", utcnow()),
             label_history=list(data.get("label_history", [])),
         )

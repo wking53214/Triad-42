@@ -16,7 +16,10 @@ from enum import Enum
 from typing import Any, Optional
 import uuid
 
-from .errors import GroundingError, IncompleteSubmission
+import re
+
+from ._clock import utcnow
+from .errors import GroundingError, IncompleteSubmission, StageOrderError
 
 
 class DistinctionKind(str, Enum):
@@ -47,6 +50,7 @@ class StructuralObservation:
     disposition: Optional[Disposition] = None
     disposition_reason: Optional[str] = None
     observation_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    created_at: str = field(default_factory=utcnow)
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -73,7 +77,17 @@ class StructuralObservation:
             "distinction": self.distinction.value,
             "disposition": self.disposition.value if self.disposition else None,
             "disposition_reason": self.disposition_reason,
+            "created_at": self.created_at,
         }
+
+
+def normalize_key(key: str) -> str:
+    """Fold an analogy key so spelling variants match.
+
+    Without this, "immune-system" and "immune system" read as two different
+    analogies and reaffirmation detection is defeated by a hyphen.
+    """
+    return re.sub(r"[\s_\-]+", " ", key.strip().casefold())
 
 
 class GroundingStatus(str, Enum):
@@ -97,6 +111,7 @@ class Grounding:
     status: GroundingStatus = GroundingStatus.NEW_GROUNDING
     exposes: Optional[str] = None
     grounding_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    created_at: str = field(default_factory=utcnow)
 
     def __post_init__(self) -> None:
         for name in ("analogy_key", "real_system", "where_it_holds"):
@@ -120,6 +135,7 @@ class Grounding:
             "where_it_breaks": self.where_it_breaks,
             "status": self.status.value,
             "exposes": self.exposes,
+            "created_at": self.created_at,
         }
 
 
@@ -129,13 +145,26 @@ class GroundingLedger:
     def __init__(self) -> None:
         self._groundings: list[Grounding] = []
         self._seen_keys: set[str] = set()
+        self._sealed = False
+
+    def seal(self) -> None:
+        self._sealed = True
+
+    @property
+    def sealed(self) -> bool:
+        return self._sealed
 
     def seed_prior_keys(self, keys: set[str]) -> None:
         """Load analogy keys established by earlier passes in this session."""
-        self._seen_keys |= {k.casefold() for k in keys}
+        self._seen_keys |= {normalize_key(k) for k in keys}
 
     def add(self, grounding: Grounding) -> Grounding:
-        key = grounding.analogy_key.casefold()
+        if self._sealed:
+            raise StageOrderError(
+                "Cannot add a grounding: the Green ledger was sealed when the "
+                "stage closed."
+            )
+        key = normalize_key(grounding.analogy_key)
         already = key in self._seen_keys
         if already and grounding.status is GroundingStatus.NEW_GROUNDING:
             raise GroundingError(

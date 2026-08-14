@@ -50,6 +50,7 @@ from .lenses import (
     GroundingLedger,
     GroundingStatus,
     StructuralObservation,
+    normalize_key,
 )
 from .engines import (
     DeepThoughtEngine,
@@ -71,7 +72,7 @@ from .provenance import (
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 from .review import ReviewPass, Session, Stage, Verdict
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 __all__ = [
     "Candidate",
@@ -91,6 +92,7 @@ __all__ = [
     "RootTrace",
     "SupportLink",
     "SurfacingStatus",
+    "normalize_key",
     "ANOMALY",
     "MANDATE",
     "PATTERN",

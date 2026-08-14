@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 import uuid
 
+from ._clock import utcnow
 from .errors import IncompleteSubmission
 
 
@@ -43,6 +44,7 @@ class CandidateRecord:
     scope: Optional[str] = None
     source_id: Optional[str] = None
     candidate_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    recorded_at: str = field(default_factory=utcnow)
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -69,6 +71,7 @@ class CandidateRecord:
             "pass_id": self.pass_id,
             "scope": self.scope,
             "source_id": self.source_id,
+            "recorded_at": self.recorded_at,
         }
 
 
