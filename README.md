@@ -197,6 +197,6 @@ found six ways to get around the rules, which are now regression tests.
 
 ## What is still open
 
-Five design questions were answered with defaults rather than decisions. They
+Eight design questions were answered with defaults rather than decisions. They
 are written up in `DECISIONS_PENDING.md` with the alternatives that were
 considered. None of them should be treated as settled.
