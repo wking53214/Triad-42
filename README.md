@@ -232,3 +232,19 @@ found six ways to get around the rules, which are now regression tests.
 Eight design questions were answered with defaults rather than decisions. They
 are written up in `DECISIONS_PENDING.md` with the alternatives that were
 considered. None of them should be treated as settled.
+
+## Operational upgrades
+
+Three non-authoritative facilities are available:
+
+- `triad42.integrity` creates SHA-256 manifests for canonical exported
+  representations. A digest attests only to content identity, not truth,
+  provenance, or epistemic status.
+- `triad42.telemetry` collects read-only pass counters for operations. The
+  counters are never consulted by stage, severity, verdict, or novelty logic.
+- `triad42.observations` detects surface linguistic patterns while preserving
+  the exact original text. Signals are reviewer metadata only; they do not
+  rewrite claims or determine their status.
+
+These facilities are isolated from the constitutional decision path. They are
+observability and boundary conveniences, not reasoning engines.

@@ -244,6 +244,11 @@ class ReviewPass:
     def stages_complete(self) -> bool:
         return len(self._closed_stages) == len(STAGE_ORDER)
 
+    @property
+    def closed_stage_count(self) -> int:
+        """Number of stages closed so far, for read-only observability."""
+        return len(self._closed_stages)
+
     def _disagreement(self) -> bool:
         """Red says stop while Gray and Green say the thing holds.
 

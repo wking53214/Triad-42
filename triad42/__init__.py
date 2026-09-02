@@ -73,6 +73,14 @@ from .provenance import (
 )
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 from .review import ReviewPass, Session, Stage, Verdict
+from .integrity import (
+    IntegrityManifest,
+    canonical_bytes,
+    content_digest,
+    manifest_for,
+)
+from .observations import LinguisticObservation, SIGNALS, observe_language
+from .telemetry import PassTelemetry, collect_pass_telemetry
 
 __version__ = "2.2.0"
 
@@ -133,6 +141,15 @@ __all__ = [
     "Triad42Error",
     "UnexaminedMandate",
     "Verdict",
+    "IntegrityManifest",
+    "LinguisticObservation",
+    "PassTelemetry",
+    "SIGNALS",
+    "canonical_bytes",
+    "collect_pass_telemetry",
+    "content_digest",
     "no_candidate",
+    "manifest_for",
+    "observe_language",
     "run_gate",
 ]
