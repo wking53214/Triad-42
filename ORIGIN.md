@@ -1,0 +1,1 @@
+$(cat /tmp/claude-0/-home-user/ddb40b8f-3d80-5878-ad80-c54803b47e8c/scratchpad/ORIGIN.md)
