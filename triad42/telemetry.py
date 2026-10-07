@@ -24,7 +24,6 @@ class PassTelemetry:
     gate_failures: int
     human_decision_routes: int
     human_overrides: int
-    provenance_chain_depth: Optional[int]
     retrieval_records: int
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,7 +37,6 @@ class PassTelemetry:
             "gate_failures": self.gate_failures,
             "human_decision_routes": self.human_decision_routes,
             "human_overrides": self.human_overrides,
-            "provenance_chain_depth": self.provenance_chain_depth,
             "retrieval_records": self.retrieval_records,
         }
 
@@ -53,10 +51,6 @@ def collect_pass_telemetry(
         if review_pass.deep_thought.result is DeepThoughtResult.NO_42_IDENTIFIED:
             rejected = int(bool(review_pass.deep_thought.candidate))
             gate_failures = int(review_pass.deep_thought.failed_at is not None)
-
-    trace = None
-    if session is not None and session.graph.has(review_pass.subject.item_id):
-        trace = session.graph.trace(review_pass.subject.item_id).machine_steps
 
     retrieved = (
         len(session.candidates.query(pass_id=review_pass.pass_id))
@@ -75,6 +69,5 @@ def collect_pass_telemetry(
         gate_failures=gate_failures,
         human_decision_routes=int(review_pass.red.routed_to_human()),
         human_overrides=int(review_pass.disagreement_override is not None),
-        provenance_chain_depth=trace,
         retrieval_records=retrieved,
     )

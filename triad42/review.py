@@ -39,7 +39,6 @@ from .lenses import (
     StructuralAssessment,
     StructuralObservation,
 )
-from .provenance import Origin, ProvenanceGraph
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 
 
@@ -377,35 +376,39 @@ class ReviewPass:
 
 @dataclass
 class Session:
-    """A sequence of passes sharing history, provenance, and a candidate store.
+    """A sequence of passes sharing history and a candidate store.
 
     History is what makes two rules enforceable: repetition is not
     verification, and an analogy used twice is reaffirmation rather than a
     second discovery.
 
-    The provenance graph and the candidate store sit here rather than inside a
-    pass, because both outlive any single review.
+    The candidate store is working memory for this session only. It is not a
+    record. Triad+42 holds no authority and keeps no durable memory: anything
+    that must outlive the session is handed to CCC (`triad42.ccc_handoff`),
+    where origin rules and human erasure are enforced. Keeping a long-lived
+    copy here instead would create a shadow record that a human erasure in CCC
+    could not reach.
     """
 
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     created_at: str = field(default_factory=utcnow)
     passes: list[ReviewPass] = field(default_factory=list)
-    graph: ProvenanceGraph = field(default_factory=ProvenanceGraph)
     candidates: CandidateStore = field(default_factory=CandidateStore)
+    #: candidate id -> CCC artifact id, filled by triad42.ccc_handoff.hand_off.
+    handed_off: dict[str, str] = field(default_factory=dict)
+    #: Pass ids whose output has been harvested into the candidate store.
+    harvested_passes: set[str] = field(default_factory=set)
 
     def start_pass(
         self,
         subject: LabeledItem,
         inputs: Optional[list[LabeledItem]] = None,
-        subject_origin: Origin = Origin.PROVENANCE_UNCERTAIN,
     ) -> ReviewPass:
         carried: list[LabeledItem] = []
         for item in inputs or []:
             carried.append(item.carry_forward(self.session_id))
         rp = ReviewPass(subject=subject, inputs=carried)
         rp.green.seed_prior_keys(self.analogy_keys())
-        if not self.graph.has(subject.item_id):
-            self.graph.register(subject, subject_origin)
         self.passes.append(rp)
         return rp
 
@@ -416,6 +419,7 @@ class Session:
         else is recorded as not surfaced, with a reason. Nothing is dropped.
         """
         surfaced_ids = surfaced_ids or set()
+        self.harvested_passes.add(rp.pass_id)
         n = 0
 
         def status_for(item_id: str) -> tuple[SurfacingStatus, str]:
@@ -491,8 +495,9 @@ class Session:
             "session_id": self.session_id,
             "created_at": self.created_at,
             "passes": [p.to_dict() for p in self.passes],
-            "provenance": self.graph.to_dict(),
             "candidates": self.candidates.to_dict(),
+            "handed_off": dict(self.handed_off),
+            "harvested_passes": sorted(self.harvested_passes),
         }
 
     def to_json(self, indent: int = 2) -> str:

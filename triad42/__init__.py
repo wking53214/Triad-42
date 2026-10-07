@@ -8,7 +8,9 @@ clusters were examined rather than skipped.
 
 The mechanism is advisory. It cannot create authority, authorize execution,
 establish canonical status, promote drafts, or convert recommendations into
-decisions.
+decisions. It holds no origin rules and no durable memory: CCC (the Cognitive
+Continuity Constitution) is the single owner of both. Output that must persist
+is handed to CCC through `triad42.ccc_handoff`, always as machine-originated.
 """
 
 from .deepthought import (
@@ -20,7 +22,7 @@ from .deepthought import (
     no_candidate,
     run_gate,
 )
-from .epistemic import Authorization, Label, LabeledItem
+from .epistemic import Label, LabeledItem
 from .errors import (
     EpistemicViolation,
     EscalationError,
@@ -62,15 +64,6 @@ from .engines import (
     NotYetSpecified,
     RedLens,
 )
-from .provenance import (
-    HUMAN_ROOTS,
-    MACHINE_ORIGINS,
-    ErasureEvent,
-    Origin,
-    ProvenanceGraph,
-    RootTrace,
-    SupportLink,
-)
 from .retrieval import CandidateKind, CandidateRecord, CandidateStore, SurfacingStatus
 from .review import ReviewPass, Session, Stage, Verdict
 from .integrity import (
@@ -82,25 +75,18 @@ from .integrity import (
 from .observations import LinguisticObservation, SIGNALS, observe_language
 from .telemetry import PassTelemetry, collect_pass_telemetry
 
-__version__ = "2.2.0"
+__version__ = "3.0.0"
 
 __all__ = [
     "Candidate",
     "CandidateKind",
     "CandidateStore",
     "DeepThoughtEngine",
-    "ErasureEvent",
     "GrayLens",
     "GreenLens",
-    "HUMAN_ROOTS",
     "IndependenceCheck",
-    "MACHINE_ORIGINS",
     "NotYetSpecified",
-    "Origin",
-    "ProvenanceGraph",
     "RedLens",
-    "RootTrace",
-    "SupportLink",
     "SurfacingStatus",
     "CrossCuttingObservation",
     "StructuralAssessment",
@@ -108,7 +94,6 @@ __all__ = [
     "ANOMALY",
     "MANDATE",
     "PATTERN",
-    "Authorization",
     "Candidate",
     "Check",
     "CheckAnswer",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "triad42"
-version = "2.2.0"
+version = "3.0.0"
 description = "An advisory cognitive review harness: Red, Gray, Green, and 42"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,8 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+# CCC owns origin, promotion and erasure rules; needed only for ccc_handoff.
+ccc = ["cognitive-continuity-constitution @ git+https://github.com/wking53214/CCC@94835da0ffb975489b2dc54d3ca3eb4bf21fd15c"]
 
 [tool.setuptools.packages.find]
 include = ["triad42*"]

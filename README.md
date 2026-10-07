@@ -28,8 +28,9 @@ would reach Red as a premise instead of a claim to be tested.
 **Epistemic labels survive.** Everything entering or leaving a pass is marked as
 a fact, an inference, an assumption, a decision, a recommendation, or unknown.
 Those marks do not change on their own. A recommendation that survives ten
-reviews is still a recommendation. The only thing that can change a label is a
-human authorization, and that authorization has to name who gave it and why.
+reviews is still a recommendation. Inside Triad+42 a label cannot change at all:
+there is no relabel operation, and a labeled item is immutable. Changing what a
+claim is, or recording that a human adopted it, happens in CCC, never here.
 This is the rule that stops a suggestion from quietly becoming a premise three
 passes later.
 
@@ -132,67 +133,60 @@ gets rejected and then corrected.
 defects found in v2.0.0, showing why Red's clustering cannot connect them and
 Gray can.
 
-`python3 example_provenance.py` runs the provenance side: origin, support links,
-a promotion that gets refused for lack of a human root, and an erasure cascade
-that leaves no zombie evidence.
-
 `python3 -m pytest tests/` runs the suite. Every rule above has tests for both
 the accepted and the rejected case.
 
-No dependencies outside the standard library. Python 3.11 or newer.
+No dependencies outside the standard library. Python 3.11 or newer. CCC is an
+optional install, needed only to hand output off (below).
 
-## Provenance: two different questions
+## Origin, promotion, and erasure belong to CCC
 
-The harness asks two questions about every claim, and keeps them apart.
+Earlier versions of this harness kept their own record of who originated each
+claim, allowed a claim to be promoted to fact with a human authorization, and
+handled erasure. As of 3.0.0 all of that is gone from Triad+42, on purpose.
 
-**Chain A asks who originated it.** User established, user accepted, assistant
-proposed, machine derived, external source, or uncertain. This is separate from
-the epistemic label, which says what kind of claim it is. A user can state an
-assumption and a machine can produce an inference; origin does not change which
-is which.
+A review tool that can certify facts is the authority creep the framework is
+meant to prevent, and two separate copies of the same origin rules drift apart.
+CCC (the Cognitive Continuity Constitution) is now the single owner of those
+rules. The removed code is preserved in the Graveyard repository under
+`triad-42/2026-10-06-origin-rules`.
 
-**Chain B asks whether the source actually backs the conclusion.** Support is an
-explicit link with a stated reason, not something inferred from adjacency. A
-statement can be authentically human and still fail to support the thing being
-drawn from it. Human origin is not an evidentiary upgrade.
+What that leaves Triad+42 with is a clean division of labor: the Triad thinks,
+CCC remembers and guards, humans decide.
 
-Keeping these apart closes a specific hole. Without it, "the user said something
-related" starts functioning as proof.
+## Handing output to CCC
 
-## The human root requirement
+`triad42.ccc_handoff.hand_off(session, ccc_system)` records every candidate from
+a session into CCC. What it guarantees is fixed, not configurable:
 
-Nothing reaches fact status on machine reasoning alone. A claim marked as fact
-must have a support chain that terminates in human-originated material, and the
-harness can walk that chain and answer why the claim exists, what backs it, how
-many machine steps sit in between, and whether it terminates anywhere legitimate.
+- **Always machine-originated, under one identity.** Every record arrives in CCC
+  from the model actor `triad42`. There is no actor parameter, so Triad+42
+  output can neither arrive as human-originated nor borrow a human-looking name.
+- **A real CCC only.** The target must be a CCC system. Handing output to
+  anything else is refused rather than counted as delivered.
+- **Nothing dropped.** Candidates never shown to the human go across with their
+  not-surfaced status and the reason, so "what did you not show me" still has an
+  answer after the session ends. A pass that was started but never harvested
+  blocks the handoff, since its output would otherwise go missing unnoticed.
+- **Never twice, and erasure sticks.** What counts as already delivered is
+  decided by what the target CCC holds for this session, including material a
+  human erased. Handing off again never duplicates output and never brings
+  erased material back.
+- **No silent skip.** If CCC is not installed and you ask for a handoff, it
+  raises. A handoff that quietly did nothing would look like one that worked.
 
-Three machine inferences supporting each other in sequence do not produce
-evidence at the end. That chain is rejected regardless of length.
+Install CCC with `pip install -e ".[ccc]"`. CI installs it and fails, rather
+than skips, if the handoff tests cannot run.
 
-## Erasure and the cascade
-
-The human can remove anything from their own record. The system has no veto. Its
-job is to record the removal and follow the consequences.
-
-When a root is erased, everything that rested on it is re-checked. Any fact that
-can no longer reach a human root is downgraded, to inference if some support
-survives and to unknown if none does. No claim keeps evidentiary status on ground
-that has been removed.
-
-Two details matter here.
-
-The cascade only ever moves status downward. That is what keeps it consistent
-with the rule that labels change only by human authorization: the erasure is the
-authorizing act, and nothing is ever raised automatically.
-
-A human decision is flagged, not downgraded. Erasing the analysis that informed a
-choice does not unmake the choice. The record notes that the decision now stands
-on removed ground and leaves the decision where the human put it.
+Where Triad+42 output feeds a governed decision inside ≡TACK, the rule is "no
+CCC record, no use": the integration point refuses output that was not handed
+off. That check lives at the integration point, not here, so Triad+42 still runs
+on its own for plain review work.
 
 ## The retrieval right
 
-Everything a pass detects goes into a candidate store, whether or not it was
-shown. Not surfacing something is a presentation decision and never a deletion,
+Everything a pass detects goes into the session's candidate store, whether or
+not it was shown. Not surfacing something is a presentation decision and never a deletion,
 so every candidate stays queryable by kind, scope, pass, and surfacing status,
 along with the stated reason it was or was not shown.
 
@@ -200,7 +194,10 @@ Insights that fail the 42 gate are kept too. A rejected insight is still a
 detected one, and the record of which check it failed is worth more later than
 the insight would have been.
 
-The store is append-only. There is no delete.
+The store is append-only for the life of the session. There is no delete. It
+is working memory, not the durable record: the durable copy, and the human's
+right to erase it, live in CCC after a handoff. Keeping a long-lived copy here
+instead would create a shadow record that an erasure in CCC could not reach.
 
 ## The reasoning layer is deliberately empty
 
