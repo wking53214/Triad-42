@@ -1,9 +1,14 @@
 """Retrieval: preserved but unfindable is not preserved.
 
-Anything the mechanism detects is stored, whether or not it was shown to the
-human. Not surfacing something is a presentation decision, never a deletion.
-Every candidate stays queryable, and the reason it was or was not surfaced is
-part of the record.
+Anything the mechanism detects during a session is kept, whether or not it
+was shown to the human. Not surfacing something is a presentation decision,
+never a deletion. Every candidate stays queryable for the life of the
+session, and the reason it was or was not surfaced travels with it.
+
+This store is session working memory, not the durable record. The durable
+record, including the human's right to ask "what did you not show me" later
+and the human's right to erase, lives in CCC. `triad42.ccc_handoff` moves
+every candidate there, surfacing status and reason included.
 """
 
 from __future__ import annotations
@@ -76,7 +81,7 @@ class CandidateRecord:
 
 
 class CandidateStore:
-    """Append-only. Nothing here is ever removed by the system."""
+    """Append-only for the life of a session. Nothing here is removed by the system."""
 
     def __init__(self) -> None:
         self._candidates: list[CandidateRecord] = []

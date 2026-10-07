@@ -13,7 +13,11 @@ class StageOrderError(Triad42Error):
 
 
 class EpistemicViolation(Triad42Error):
-    """An attempt to change an epistemic label without human authorization."""
+    """An epistemic-label violation.
+
+    Kept for compatibility. As of 3.0.0 Triad+42 has no relabel operation, so
+    nothing in this package raises it; label and promotion rules live in CCC.
+    """
 
 
 class IncompleteSubmission(Triad42Error):

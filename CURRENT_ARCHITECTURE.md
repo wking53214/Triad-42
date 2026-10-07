@@ -1,14 +1,14 @@
 # Triad-42 Current Architecture
 
-This is a repository-derived model of Triad-42 2.2.0. It describes implemented
+This is a repository-derived model of Triad-42 3.0.0. It describes implemented
 behavior, not the aspirations in the README.
 
 ## Repository surface
 
 The project is a dependency-free Python 3.11 package (`pyproject.toml`) with
-11 modules under `triad42/`, 100 pytest tests in `tests/`, three runnable
-examples, a README, and `DECISIONS_PENDING.md`. There is no CI configuration,
-database adapter, persistence loader, cryptographic module, external model
+11 modules under `triad42/`, pytest tests in `tests/`, two runnable examples,
+a README, and `DECISIONS_PENDING.md`. CCC is an optional install used only by
+`ccc_handoff.py`. There is no database adapter, persistence loader, cryptographic module, external model
 client, or implemented reasoning engine.
 
 The public exports in `triad42/__init__.py` expose the records, enums,
@@ -31,16 +31,15 @@ verdict is write-once with a timestamp and required reason.
 
 ## Records and stages
 
-- `epistemic.py`: `Label`, `Authorization`, and mutable `LabeledItem`.
-  Labels are FACT, INFERENCE, ASSUMPTION, DECISION, RECOMMENDATION, or UNKNOWN.
-  Carry-forward preserves the label and history. Every relabel requires a
-  recorded human authorization; registered items also have a provenance guard
-  against unauthorized promotion to FACT.
-- `provenance.py`: Chain A `Origin`, Chain B `SupportLink`, `RootTrace`, and
-  `ProvenanceGraph`. Support links require reasons and cannot cycle. FACT status
-  for machine-derived material requires a live path to human-originated
-  material. Human erasure records an event and cascades downgrades or decision
-  flags; `zombie_check()` detects fact records left without a human root.
+- `epistemic.py`: `Label` and immutable `LabeledItem`. Labels are FACT,
+  INFERENCE, ASSUMPTION, DECISION, RECOMMENDATION, or UNKNOWN. Carry-forward
+  preserves the label. There is no relabel operation and no authorization
+  type: a label supplied by the caller is carried, never certified or changed.
+- `ccc_handoff.py`: `hand_off(session, system)` records every not-yet-handed-off
+  candidate into a CCC system as a MODEL-actor INFERENCE, with surfacing status
+  and reason in metadata. Raises if CCC is not importable. Origin, promotion,
+  and erasure rules live in CCC only (removed from this package in 3.0.0; the
+  former `provenance.py` is preserved in the Graveyard repository).
 - `findings.py`: Red `Finding` and `FindingLedger`. The reviewer supplies
   severity (LOW, MEDIUM, HIGH, CRITICAL). Same-scope/same-tier findings form
   anomaly/pattern/mandate clusters at 1/2/3. A mandate requires examination.
@@ -58,15 +57,17 @@ verdict is write-once with a timestamp and required reason.
   ordered checks reject already-stated, renamed, unrelated, or immaterial
   candidates; abstraction is retained with an abstraction result. A cleared
   candidate must name a consequence area. No candidate is a valid result.
-- `retrieval.py`: append-only `CandidateStore` and `CandidateRecord`.
+- `retrieval.py`: session-scoped, append-only `CandidateStore` and
+  `CandidateRecord`.
   Findings, examinations, Gray observations, Green groundings, and nonempty
   42 candidates can be harvested with kind, pass, scope, source, surfacing
   status, reason, and timestamp. Non-surfacing is presentation metadata, not
-  deletion.
+  deletion. The store is working memory; the durable record is CCC.
 - `review.py`: `ReviewPass` composes the stage ledgers, checks component
   disagreement, exports the complete pass, and yields only labelled
-  inference/recommendation outputs. `Session` supplies pass history, the
-  provenance graph, analogy history, and candidate store.
+  inference/recommendation outputs. `Session` supplies pass history, analogy
+  history, the candidate store, and the `handed_off` map of candidate id to CCC
+  artifact id.
 - `engines.py`: protocols only (`RedLens`, `GrayLens`, `GreenLens`,
   `DeepThoughtEngine`, `IndependenceCheck`) plus `unavailable()`. No automated
   lens or model execution is implemented. Red's protocol deliberately omits
@@ -94,8 +95,8 @@ routes to human decision unless a written override is supplied.
 Already implemented: deterministic analogy-key normalization; recurrence
 tracking for Green analogies; stage order and sealing; write-once verdicts;
 timestamps on records; append-only candidate retention; explicit surfacing
-reasons; one-way JSON export; label-history authorization; human-root and
-support-chain checks; cycle prevention; erasure cascade; cross-cutting Gray
+reasons; one-way JSON export; immutable labels; machine-only CCC handoff;
+cross-cutting Gray
 observations; explicit negative outcomes; export-boundary content manifests;
 reviewer-only linguistic observations; and read-only operational counters.
 
@@ -106,7 +107,8 @@ persistence/reload; or automatic reasoning.
 
 ## Architectural conclusion
 
-The package is a procedural and provenance-preserving review boundary, not a
+The package is a procedural review boundary with no authority and no durable
+memory, not a
 content-processing, scoring, or autonomous-evaluation system. Any addition
 that turns wording into epistemic status, recurrence into invalidity, hashes
 into truth, or telemetry into a decision would cross that boundary.

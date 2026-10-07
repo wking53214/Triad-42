@@ -1,9 +1,9 @@
+import dataclasses
 import json
 
 import pytest
 
 from triad42 import (
-    Authorization,
     Candidate,
     Check,
     CheckAnswer,
@@ -72,26 +72,20 @@ def gate_answers(**overrides):
 # --------------------------------------------------------------------------
 
 
-def test_label_cannot_change_without_authorization():
+def test_label_cannot_be_changed_inside_triad42():
+    """Triad+42 has no relabel operation. Promotion authority belongs to CCC."""
     item = LabeledItem(text="X improves throughput", label=Label.RECOMMENDATION)
-    with pytest.raises(EpistemicViolation):
-        item.relabel(Label.FACT, None)
+    assert not hasattr(item, "relabel")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        item.label = Label.FACT  # type: ignore[misc]
     assert item.label is Label.RECOMMENDATION
 
 
-def test_label_changes_only_with_recorded_authorization():
-    item = LabeledItem(text="X improves throughput", label=Label.RECOMMENDATION)
-    item.relabel(Label.DECISION, Authorization(authorized_by="William", reason="Adopted"))
-    assert item.label is Label.DECISION
-    assert item.label_history[0]["from"] == "RECOMMENDATION"
-    assert item.label_history[0]["authorization"]["authorized_by"] == "William"
+def test_no_authorization_type_exists_to_grant_promotion():
+    import triad42
 
-
-def test_authorization_requires_identity_and_reason():
-    with pytest.raises(IncompleteSubmission):
-        Authorization(authorized_by="", reason="because")
-    with pytest.raises(IncompleteSubmission):
-        Authorization(authorized_by="William", reason="  ")
+    assert not hasattr(triad42, "Authorization")
+    assert not hasattr(triad42, "ProvenanceGraph")
 
 
 def test_recommendation_survives_carry_forward_as_recommendation():

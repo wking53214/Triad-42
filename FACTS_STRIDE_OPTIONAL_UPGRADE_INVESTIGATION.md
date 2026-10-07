@@ -1,5 +1,10 @@
 # FACTS / STRIDE Optional Upgrade Investigation
 
+> **Historical document.** Written against Triad-42 2.2.0. As of 3.0.0 the
+> provenance graph, relabel, `Authorization` and fact promotion described here
+> were removed; CCC owns those rules. See README, "Origin, promotion, and
+> erasure belong to CCC".
+
 **Target:** `/home/wking53214/Triad-42`, commit `af96bf9`  
 **Method:** repository-first review of package code, tests, examples, README,
 pending decisions, and the current operational-upgrade modules. FACTS and

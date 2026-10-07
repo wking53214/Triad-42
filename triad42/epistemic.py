@@ -1,20 +1,26 @@
 """Amendment 1: epistemic persistence.
 
-Every item entering or leaving a review pass carries exactly one label.
-Labels do not decay, drift, or upgrade. A recommendation that survives ten
-reviews is still a recommendation. The only thing that may change a label is
-an explicit, recorded human authorization event.
+Every item entering or leaving a review pass carries exactly one label, and
+that label never changes inside Triad+42. Labels do not decay, drift, or
+upgrade here, and there is no relabel operation at all: a labeled item is
+immutable. A recommendation that survives ten reviews is still a
+recommendation.
+
+Changing what a claim is, or recording that a human adopted it, is not this
+package's job. That authority belongs to CCC (the Cognitive Continuity
+Constitution), which is the single owner of origin and promotion rules. See
+`triad42.ccc_handoff`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 import uuid
 
 from ._clock import utcnow
-from .errors import EpistemicViolation, IncompleteSubmission
+from .errors import IncompleteSubmission
 
 
 class Label(str, Enum):
@@ -29,77 +35,29 @@ class Label(str, Enum):
 
 
 @dataclass(frozen=True)
-class Authorization:
-    """A recorded human authorization for a label change.
-
-    The harness never creates one of these on its own. A caller must supply
-    it, and the identity of the authorizing human is required.
-    """
-
-    authorized_by: str
-    reason: str
-
-    def __post_init__(self) -> None:
-        if not self.authorized_by.strip():
-            raise IncompleteSubmission("Authorization requires an authorizing human.")
-        if not self.reason.strip():
-            raise IncompleteSubmission("Authorization requires a stated reason.")
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"authorized_by": self.authorized_by, "reason": self.reason}
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Authorization":
-        return cls(authorized_by=data["authorized_by"], reason=data["reason"])
-
-
-@dataclass
 class LabeledItem:
-    """A statement carrying its epistemic label and its history.
+    """A statement carrying its epistemic label.
 
-    The label travels with the item across passes. `provenance` records where
-    the item came from, including a prior pass, so a pass-2 input that was a
-    pass-1 output cannot arrive looking like fresh ground truth.
+    Immutable. The label travels with the item across passes unchanged.
+    `origin_pass` records where the item came from, including a prior pass,
+    so a pass-2 input that was a pass-1 output cannot arrive looking like
+    fresh ground truth.
+
+    A label supplied by the caller (for example FACT on a subject) is carried,
+    not certified. Triad+42 does not vouch for it; CCC decides what a claim is.
     """
 
     text: str
     label: Label
     item_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     origin_pass: Optional[str] = None
-    label_history: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=utcnow)
-    #: Set by ProvenanceGraph.register. Consulted on every label change so the
-    #: human-root requirement cannot be sidestepped by relabelling directly.
-    promotion_guard: Optional[Callable[["LabeledItem", "Label"], None]] = field(
-        default=None, repr=False, compare=False
-    )
 
     def __post_init__(self) -> None:
         if not self.text.strip():
             raise IncompleteSubmission("A labeled item requires text.")
         if not isinstance(self.label, Label):
-            self.label = Label(self.label)
-
-    def relabel(self, new_label: Label, authorization: Authorization) -> None:
-        """Change the label. Requires an explicit human authorization event."""
-        if not isinstance(authorization, Authorization):
-            raise EpistemicViolation(
-                f"Cannot change label {self.label.value} -> "
-                f"{Label(new_label).value} without a recorded human "
-                "authorization. Labels do not upgrade through review."
-            )
-        new_label = Label(new_label)
-        if self.promotion_guard is not None:
-            self.promotion_guard(self, new_label)
-        self.label_history.append(
-            {
-                "from": self.label.value,
-                "to": new_label.value,
-                "authorization": authorization.to_dict(),
-                "at": utcnow(),
-            }
-        )
-        self.label = new_label
+            object.__setattr__(self, "label", Label(self.label))
 
     def carry_forward(self, into_pass: str) -> "LabeledItem":
         """Produce this item as an input to a later pass, label intact."""
@@ -108,7 +66,6 @@ class LabeledItem:
             label=self.label,
             item_id=self.item_id,
             origin_pass=self.origin_pass or into_pass,
-            label_history=list(self.label_history),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -118,7 +75,6 @@ class LabeledItem:
             "label": self.label.value,
             "origin_pass": self.origin_pass,
             "created_at": self.created_at,
-            "label_history": list(self.label_history),
         }
 
     @classmethod
@@ -129,5 +85,4 @@ class LabeledItem:
             item_id=data["item_id"],
             origin_pass=data.get("origin_pass"),
             created_at=data.get("created_at", utcnow()),
-            label_history=list(data.get("label_history", [])),
         )

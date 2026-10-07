@@ -1,5 +1,10 @@
 # Triad-42 Bounded Operational Upgrades
 
+> **Historical document.** Written against Triad-42 2.2.0. As of 3.0.0 the
+> provenance graph, relabel, `Authorization` and fact promotion described here
+> were removed; CCC owns those rules. See README, "Origin, promotion, and
+> erasure belong to CCC".
+
 These additive APIs are operational and observational. They do not make
 Triad-42 decide truth, severity, novelty, grounding, or authority.
 

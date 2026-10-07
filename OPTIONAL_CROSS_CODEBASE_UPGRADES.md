@@ -1,5 +1,10 @@
 # Optional Cross-Codebase Upgrade Investigation
 
+> **Historical document.** Written against Triad-42 2.2.0. As of 3.0.0 the
+> provenance graph, relabel, `Authorization` and fact promotion described here
+> were removed; CCC owns those rules. See README, "Origin, promotion, and
+> erasure belong to CCC".
+
 **Target:** `/home/wking53214/Triad-42` (Triad-42 2.2.0 plus commit
 `af96bf9`)
 

@@ -1,5 +1,10 @@
 # Decisions Pending
 
+> **Note for 3.0.0.** Passages below that refer to the provenance graph,
+> relabelling, `Authorization`, or fact promotion describe 2.2.0. Those were
+> removed; CCC owns those rules. See README, "Origin, promotion, and erasure
+> belong to CCC".
+
 Five questions the framework does not answer. Each was given a working default
 so the build could proceed. None of these are decisions. They are placeholders
 with reasons attached, and each should be settled deliberately.
