@@ -15,7 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 # CCC owns origin, promotion and erasure rules; needed only for ccc_handoff.
-ccc = ["cognitive-continuity-constitution @ git+https://github.com/wking53214/CCC@94835da0ffb975489b2dc54d3ca3eb4bf21fd15c"]
+ccc = ["cognitive-continuity-constitution @ git+https://github.com/wking53214/CCC@96cfc9c5908d68df6fa56907b09ca26363c57087"]
 
 [tool.setuptools.packages.find]
 include = ["triad42*"]
