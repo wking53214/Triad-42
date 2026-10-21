@@ -183,6 +183,18 @@ CCC record, no use": the integration point refuses output that was not handed
 off. That check lives at the integration point, not here, so Triad+42 still runs
 on its own for plain review work.
 
+## Binding a CNS verdict (optional)
+
+`triad42.cns_connector` lets a CNS verdict about one piece of review output be
+tied to exactly that output. For a surfaced candidate it computes the CNS digest
+of the same content CNS's admission gate already binds when Link hands Triad
+output on (the source `triad42`, the candidate id, and the SHA-256 of the text),
+under the subject `triad42:<candidate id>`, and `binds(result, candidate)` says
+whether a `cns.gate.GateResult` was issued against it. It is binding only: it
+judges nothing, and CNS judges nothing for Triad+42 through it. Nothing else in
+the package imports CNS. Install it with `pip install -e ".[cns]"`; CI runs the
+suite once without it and once with it, where the connector tests may not skip.
+
 ## The retrieval right
 
 Everything a pass detects goes into the session's candidate store, whether or
