@@ -28,3 +28,27 @@ jobs:
         run: |
           python example_pass.py
           python example_cross_cutting.py
+
+  cns:
+    # The optional CNS connector (triad42.cns_connector), with the cns extra installed beside the ccc extra
+    # the suite already needs. TRIAD42_REQUIRE_CNS=1 turns a missing cns into a failure, so the connector
+    # tests cannot silently skip here.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install -e ".[ccc,cns]"
+      - name: Test with CNS present (CNS connector and CCC handoff tests may not skip)
+        env:
+          TRIAD42_REQUIRE_CNS: "1"
+          TRIAD42_REQUIRE_CCC: "1"
+        run: python -m pytest -q -rs
