@@ -90,7 +90,7 @@ def test_later_output_is_handed_off_incrementally():
 def test_there_is_no_way_to_choose_the_actor():
     import inspect
 
-    assert set(inspect.signature(hand_off).parameters) == {"session", "system"}
+    assert set(inspect.signature(hand_off).parameters) == {"session", "system", "attestation_key"}
     session, _, _ = _session_with_output()
     system = CCCSystem()
     for art_id in hand_off(session, system).values():
