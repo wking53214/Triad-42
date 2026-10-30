@@ -17,7 +17,7 @@ dev = ["pytest>=7"]
 # CCC owns origin, promotion and erasure rules; needed only for ccc_handoff.
 ccc = ["cognitive-continuity-constitution @ git+https://github.com/wking53214/CCC@96cfc9c5908d68df6fa56907b09ca26363c57087"]
 # Optional: lets one review output be named for a CNS verdict (triad42.cns_connector). Nothing in Triad+42 imports CNS otherwise.
-cns = ["cns @ git+https://github.com/wking53214/CNS.git@v1.9.0"]
+cns = ["cns @ git+https://github.com/wking53214/CNS.git@v2.2.0"]
 
 [tool.setuptools.packages.find]
 include = ["triad42*"]
