@@ -36,8 +36,9 @@ verdict is write-once with a timestamp and required reason.
   preserves the label. There is no relabel operation and no authorization
   type: a label supplied by the caller is carried, never certified or changed.
 - `ccc_handoff.py`: `hand_off(session, system)` records every not-yet-handed-off
-  candidate into a CCC system as a MODEL-actor INFERENCE, with surfacing status
-  and reason in metadata. Raises if CCC is not importable. Origin, promotion,
+  candidate into a CCC system as MODEL-actor material of UNKNOWN standing (CCC's
+  ingest refuses to make a conclusion; the Triad label stays in topics and
+  metadata), with surfacing status and reason in metadata. Raises if CCC is not importable. Origin, promotion,
   and erasure rules live in CCC only (removed from this package in 3.0.0; the
   former `provenance.py` is preserved in the Graveyard repository).
 - `findings.py`: Red `Finding` and `FindingLedger`. The reviewer supplies
