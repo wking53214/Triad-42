@@ -166,10 +166,12 @@ def hand_off(session: Session, system: Any, *, attestation_key: bytes | None = N
         if attest is not None:
             metadata["attestation"] = attest(attestation_key, source=SOURCE_TAG,
                                              candidate_id=candidate.candidate_id, text_digest=digest)
+        # UNKNOWN, not INFERENCE: CCC's ingest takes material in and refuses to make a conclusion
+        # (CCC-EPISTEMIC-001). The Triad's own label stays in topics and metadata as candidate_kind.
         artifact = system.ingest(
             candidate.text,
             actor=actor,
-            epistemic_status=EpistemicStatus.INFERENCE,
+            epistemic_status=EpistemicStatus.UNKNOWN,
             topics=(SOURCE_TAG, candidate.kind.value),
             reason=HANDOFF_REASON,
             metadata=metadata,

@@ -47,7 +47,7 @@ def test_every_candidate_is_recorded_as_machine_originated():
         assert artifact.origin.kind is ActorType.MODEL
         assert artifact.machine_origin
         assert artifact.provenance_status is ProvenanceStatus.ASSISTANT_PROPOSED
-        assert artifact.epistemic_status is EpistemicStatus.INFERENCE
+        assert artifact.epistemic_status is EpistemicStatus.UNKNOWN
         assert SOURCE_TAG in artifact.topics
 
 

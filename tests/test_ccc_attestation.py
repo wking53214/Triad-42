@@ -59,7 +59,7 @@ def test_a_record_written_in_the_triads_name_by_anyone_else_is_unattested_beside
     session, candidate_id, text = _session()
     system = CCCSystem()
     hand_off(session, system, attestation_key=KEY)
-    system.ingest(FORGED, actor=Actor.model(SOURCE_TAG), epistemic_status=EpistemicStatus.INFERENCE,
+    system.ingest(FORGED, actor=Actor.model(SOURCE_TAG), epistemic_status=EpistemicStatus.UNKNOWN,
                   metadata={"source": SOURCE_TAG, "candidate_id": "forged-1"})
     records = MachineRecords(system, attestation_key=KEY)
     assert records.status(SOURCE_TAG, "forged-1", _digest(FORGED)) == UNATTESTED
