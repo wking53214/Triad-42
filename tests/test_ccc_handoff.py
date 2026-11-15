@@ -38,7 +38,7 @@ def _session_with_output() -> tuple[Session, str, str]:
 
 def test_every_candidate_is_recorded_as_machine_originated():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     recorded = hand_off(session, system)
 
     assert len(recorded) == len(session.candidates.all()) == 2
@@ -53,7 +53,7 @@ def test_every_candidate_is_recorded_as_machine_originated():
 
 def test_not_surfaced_candidates_go_across_with_their_reason():
     session, shown_id, hidden_id = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     hand_off(session, system)
 
     by_source = {}
@@ -68,7 +68,7 @@ def test_not_surfaced_candidates_go_across_with_their_reason():
 
 def test_handoff_never_records_the_same_candidate_twice():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     first = hand_off(session, system)
     second = hand_off(session, system)
     assert len(first) == 2
@@ -78,7 +78,7 @@ def test_handoff_never_records_the_same_candidate_twice():
 
 def test_later_output_is_handed_off_incrementally():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     hand_off(session, system)
     rp = session.start_pass(LabeledItem("The revised plan.", Label.ASSUMPTION))
     rp.add_finding("Revision still lacks rollback.", Severity.HIGH, scope="plan")
@@ -92,7 +92,7 @@ def test_there_is_no_way_to_choose_the_actor():
 
     assert set(inspect.signature(hand_off).parameters) == {"session", "system", "attestation_key"}
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     for art_id in hand_off(session, system).values():
         origin = system.store.require_artifact(art_id).origin
         assert origin.kind is ActorType.MODEL
@@ -104,7 +104,7 @@ def test_ccc_refuses_to_promote_handed_off_output_on_a_model_s_say_so():
     from ccc.errors import ConstitutionViolation
 
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     art_id = next(iter(hand_off(session, system).values()))
     with pytest.raises(ConstitutionViolation):
         system.accept(art_id, actor=Actor.model("triad42"), reason="looks right",
@@ -113,7 +113,7 @@ def test_ccc_refuses_to_promote_handed_off_output_on_a_model_s_say_so():
 
 def test_human_erasure_in_ccc_reaches_handed_off_output():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     art_id = next(iter(hand_off(session, system).values()))
     system.erase(art_id, actor=Actor.human("william"), reason="not mine to keep",
                  authorization_basis="owner request")
@@ -122,7 +122,7 @@ def test_human_erasure_in_ccc_reaches_handed_off_output():
 
 def test_handoff_records_its_reason_in_the_audit_trail():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     recorded = hand_off(session, system)
     reasons = {
         e.reason for e in system.audit_trail.all()
@@ -144,7 +144,7 @@ def test_missing_ccc_raises_instead_of_skipping(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", fake_import)
     session, _, _ = _session_with_output()
     with pytest.raises(ImportError, match="never skips"):
-        ccc_handoff.hand_off(session, CCCSystem())
+        ccc_handoff.hand_off(session, CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True))
     assert session.handed_off == {}
 
 
@@ -158,13 +158,13 @@ def test_a_stand_in_target_is_refused_and_does_not_count_as_delivered():
     with pytest.raises(TypeError):
         hand_off(session, StandIn())
     assert session.handed_off == {}
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     assert len(hand_off(session, system)) == 2
 
 
 def test_a_second_ccc_system_receives_everything():
     session, _, _ = _session_with_output()
-    first, second = CCCSystem(), CCCSystem()
+    first, second = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True), CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     assert len(hand_off(session, first)) == 2
     assert len(hand_off(session, second)) == 2
     assert hand_off(session, first) == {}
@@ -178,7 +178,7 @@ def test_harvesting_a_pass_twice_does_not_double_record():
     session.harvest(rp)
     session.harvest(rp)
     assert len(session.candidates.all()) == 2
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     assert len(hand_off(session, system)) == 1
     assert len(system.store.artifacts) == 1
 
@@ -186,7 +186,7 @@ def test_harvesting_a_pass_twice_does_not_double_record():
 def test_an_unharvested_pass_blocks_the_handoff():
     session, _, _ = _session_with_output()
     session.start_pass(LabeledItem("Started, never harvested.", Label.ASSUMPTION))
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     with pytest.raises(ValueError, match="never harvested"):
         hand_off(session, system)
     assert len(system.store.artifacts) == 0
@@ -194,10 +194,33 @@ def test_an_unharvested_pass_blocks_the_handoff():
 
 def test_handing_off_again_never_resurrects_erased_material():
     session, _, _ = _session_with_output()
-    system = CCCSystem()
+    system = CCCSystem(allow_unguarded_writes=True, allow_unverified_humans=True)
     art_id = next(iter(hand_off(session, system).values()))
     system.erase(art_id, actor=Actor.human("william"), reason="remove it",
                  authorization_basis="owner request")
     assert hand_off(session, system) == {}
     assert len(system.store.artifacts) == 2
     assert system.store.require_artifact(art_id).content is None
+
+
+def test_the_handoff_works_on_a_ccc_built_with_a_real_permission_and_verifier():
+    """Not only on a CCC that opted out: with a write permission that allows `ingest` and a human verifier that
+    allows nothing, the handoff records every candidate, and CCC still refuses any other write."""
+    from ccc.errors import WritePermissionRefused
+
+    asked = []
+
+    def write_permission(request) -> bool:
+        asked.append(request.operation)
+        return request.operation == "ingest"
+
+    system = CCCSystem(write_permission=write_permission, human_verifier=lambda request: False)
+    session, _, _ = _session_with_output()
+
+    recorded = hand_off(session, system)
+
+    assert len(recorded) == len(session.candidates.all()) == 2
+    assert set(asked) == {"ingest"}
+    with pytest.raises(WritePermissionRefused):
+        system.record("a write nobody permitted", actor=Actor.model("someone"),
+                      epistemic_status=EpistemicStatus.UNKNOWN)
