@@ -84,7 +84,7 @@ class ExaminationOutcome(str, Enum):
     REQUIRES_HUMAN_DECISION = "REQUIRES_HUMAN_DECISION"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Finding:
     """A single Red finding.
 
@@ -92,13 +92,16 @@ class Finding:
     attach to the same component, boundary, or authority relationship.
     `derived_from` is populated when the finding was produced by escalation
     rather than observed directly.
+
+    A finding is frozen. Once it is on the record nothing can edit its text,
+    severity or scope. To change a finding, add a new one; the old one stays.
     """
 
     text: str
     severity: Severity
     scope: str
     finding_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
-    derived_from: list[str] = field(default_factory=list)
+    derived_from: tuple[str, ...] = field(default_factory=tuple)
     escalation_cause: Optional[str] = None
     created_at: str = field(default_factory=utcnow)
 
@@ -111,7 +114,8 @@ class Finding:
                 "distinguish related findings from coincidence."
             )
         if not isinstance(self.severity, Severity):
-            self.severity = Severity(self.severity)
+            object.__setattr__(self, "severity", Severity(self.severity))
+        object.__setattr__(self, "derived_from", tuple(self.derived_from))
 
     @property
     def is_derived(self) -> bool:
@@ -139,7 +143,7 @@ class Finding:
             severity=Severity(data["severity"]),
             scope=data["scope"],
             finding_id=data["finding_id"],
-            derived_from=list(data.get("derived_from", [])),
+            derived_from=tuple(data.get("derived_from", ())),
             escalation_cause=data.get("escalation_cause"),
         )
 
@@ -360,7 +364,7 @@ class FindingLedger:
             text=f"[escalated from {cluster.severity.value}] {cause}",
             severity=target,
             scope=cluster.scope,
-            derived_from=list(cluster.finding_ids),
+            derived_from=tuple(cluster.finding_ids),
             escalation_cause=cause,
         )
         self.add(derived)

@@ -45,6 +45,8 @@ def collect_pass_telemetry(
     review_pass: ReviewPass, session: Optional[Session] = None
 ) -> PassTelemetry:
     """Collect counters without mutating or evaluating the pass."""
+    # Counts only, read from the ledger directly: telemetry never shows a finding,
+    # so it may run while Gray's independent phase hides Red from the reviewer.
     rejected = 0
     gate_failures = 0
     if review_pass.deep_thought is not None:
@@ -60,14 +62,14 @@ def collect_pass_telemetry(
     return PassTelemetry(
         pass_id=review_pass.pass_id,
         stages_closed=review_pass.closed_stage_count,
-        findings=len(review_pass.red.findings),
-        examinations=len(review_pass.red.examinations),
+        findings=len(review_pass._red.findings),
+        examinations=len(review_pass._red.examinations),
         escalations=sum(
-            1 for e in review_pass.red.examinations if e.produced_finding_id
+            1 for e in review_pass._red.examinations if e.produced_finding_id
         ),
         rejected_candidates=rejected,
         gate_failures=gate_failures,
-        human_decision_routes=int(review_pass.red.routed_to_human()),
+        human_decision_routes=int(review_pass._red.routed_to_human()),
         human_overrides=int(review_pass.disagreement_override is not None),
         retrieval_records=retrieved,
     )
