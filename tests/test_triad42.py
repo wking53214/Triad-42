@@ -744,8 +744,7 @@ def test_cross_cutting_does_not_change_severity():
     from triad42 import CrossCuttingObservation
 
     rp, (a, b, c) = _pass_with_findings()
-    before = [f.severity for f in rp.red.findings]
-    rp.red_findings_for_gray()
+    before = [f.severity for f in rp.red_findings_for_gray()]
     rp.add_cross_cutting(CrossCuttingObservation(
         shared_cause="one architectural defect in three places",
         finding_ids=(a.finding_id, b.finding_id, c.finding_id),
@@ -800,3 +799,105 @@ def test_gray_may_stay_single_phase():
     rp.close_stage()
     rp.close_stage()
     assert rp.declare(Verdict.NO_BLOCKING_FINDINGS, "clean")
+
+
+# --------------------------------------------------------------------------
+# the four ways around the rules (correction 118)
+# --------------------------------------------------------------------------
+
+
+def test_a_finding_on_the_record_cannot_be_edited():
+    rp = ReviewPass(subject=subject())
+    f = rp.add_finding("Guard sits above the object it guards", Severity.HIGH, "mod")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        f.severity = Severity.LOW  # type: ignore[misc]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        f.text = "changed"  # type: ignore[misc]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        f.scope = "elsewhere"  # type: ignore[misc]
+    assert rp.red.get(f.finding_id).severity is Severity.HIGH
+
+
+def test_a_correction_is_a_new_finding_and_the_old_one_stays():
+    rp = ReviewPass(subject=subject())
+    old = rp.add_finding("Guard sits above the object it guards", Severity.HIGH, "mod")
+    new = rp.add_finding("Corrected: it sits above one object, not two", Severity.MEDIUM, "mod")
+    ids = [f.finding_id for f in rp.red.findings]
+    assert ids == [old.finding_id, new.finding_id]
+
+
+def test_the_verdict_cannot_be_assigned_directly():
+    from triad42 import Verdict
+
+    rp = ReviewPass(subject=subject())
+    rp.add_finding("Blocking defect", Severity.HIGH, "mod")
+    for _ in range(4):
+        rp.close_stage()
+    with pytest.raises(AttributeError):
+        rp.verdict = Verdict.NO_BLOCKING_FINDINGS  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        rp.verdict_reason = "forged"  # type: ignore[misc]
+    assert rp.verdict is None
+    rp.declare(Verdict.FAILS, "A blocking finding stands.")
+    assert rp.verdict is Verdict.FAILS
+    assert rp.to_dict()["verdict"] == "FAILS"
+
+
+def test_a_42_record_built_by_hand_is_refused():
+    from triad42 import GateRecord
+
+    rp = ReviewPass(subject=subject())
+    for _ in range(3):
+        rp.close_stage()
+    hand_built = GateRecord(
+        candidate="A synthesis nobody checked",
+        result=DeepThoughtResult.NOVEL_INSIGHT,
+        consequence_area="architecture",
+    )
+    assert not hand_built.issued_by_gate
+    with pytest.raises(IncompleteSubmission):
+        rp.record_42(hand_built)
+    assert rp.deep_thought is None
+
+
+def test_a_42_record_from_the_gate_is_accepted_and_cannot_be_edited():
+    rp = ReviewPass(subject=subject())
+    for _ in range(3):
+        rp.close_stage()
+    rec = no_candidate()
+    assert rec.issued_by_gate
+    assert rp.record_42(rec) is rec
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        rec.result = DeepThoughtResult.NOVEL_INSIGHT  # type: ignore[misc]
+
+
+def test_a_second_42_record_cannot_replace_the_first():
+    rp = ReviewPass(subject=subject())
+    for _ in range(3):
+        rp.close_stage()
+    first = no_candidate()
+    rp.record_42(first)
+    with pytest.raises(IncompleteSubmission):
+        rp.record_42(no_candidate())
+    assert rp.deep_thought is first
+
+
+def test_red_cannot_be_read_while_grays_independent_phase_is_open():
+    rp, _ = _pass_with_findings()
+    assert rp.gray_phase == 1
+    with pytest.raises(StageOrderError):
+        rp.red.findings
+    snapshot = rp.to_dict()
+    assert snapshot["red"] == {"withheld": "Gray's independent phase is open"}
+    assert "Guard sits above" not in json.dumps(snapshot)
+    rp.red_findings_for_gray()
+    assert len(rp.red.findings) == 3
+    assert len(rp.to_dict()["red"]["findings"]) == 3
+
+
+def test_telemetry_still_counts_while_red_is_hidden_from_gray():
+    from triad42 import collect_pass_telemetry
+
+    rp, _ = _pass_with_findings()
+    assert rp.gray_phase == 1
+    assert collect_pass_telemetry(rp).findings == 3

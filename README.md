@@ -26,7 +26,7 @@ insight is novel. It only refuses records that break the framework's own rules.
 - **Depends on.** The standard library. CCC is an optional install for handing output off.
 - **Depended on by.** `link` imports it (stated in link's README; not re-checked here).
 - **Fail behavior.** Closed on rule breaks made through the pass methods: out-of-order stages, label changes and re-declared verdicts are refused. It cannot judge the quality of the reviewer's thinking, so a wrong but well-formed review passes.
-- **Bypass conditions.** The checks sit on the methods, and several of the objects behind them can still be changed or read directly. Four cases were run on 2026-11-17 and are listed under "What the enforcement does not cover". Treat the harness as a discipline for a cooperating reviewer, not as a barrier against code that holds the pass object.
+- **Bypass conditions.** The checks sit on the methods. A finding, a gate record and the verdict can no longer be changed in place, a hand-built 42 record is refused, and Red cannot be read while Gray's independent phase is open. One case is still open: a derived finding can be added by hand during Red (see "What the enforcement does not cover"). Treat the harness as a discipline for a cooperating reviewer, not as a barrier against code that holds the pass object.
 
 EXECUTED 2026-11-17 at `e908e32`, Python 3.13, each run in its own fresh environment. With pytest only (the command under "Running it"): 70 passed, 3 skipped (the two CCC test files and the CNS one). With the `ccc` extra and `TRIAD42_REQUIRE_CCC=1`, as CI's first job runs: 97 passed, 1 skipped. With both extras and both switches, as CI's second job runs: 144 passed, 0 skipped, at the pins (CCC `d133b81`, CNS v4.0.0) and again at CCC main `2379de8` with CNS v4.1.0. Both example scripts exit 0. The 144 recorded here on 2026-11-15 is the last figure; it includes the handoff and attestation tests, which run against the real CCC package. Not run: GitHub CI, Python 3.11 and 3.12.
 
@@ -128,32 +128,33 @@ written reason.
 
 ## What the enforcement does not cover
 
-The rules above are checked when a reviewer goes through the pass methods. They
-are not a boundary against code that holds the pass object. Each case below was
-run on 2026-11-17 at `e908e32` (EXECUTED):
+The rules above are checked when a reviewer goes through the pass methods.
+They are not a boundary against code that holds the pass object.
 
-- **A sealed finding can still be edited.** Adding to a sealed Red ledger is
-  refused. But a finding is a plain mutable object: after the seal, and after
-  every stage had closed, a HIGH finding's severity and text were changed in
-  place, and "no blocking findings" was then accepted. The verdict field can
-  also be assigned directly after a verdict was declared; only a second call to
-  `declare` is refused.
+Four cases were run on 2026-11-17 at `e908e32` (EXECUTED) and closed afterwards.
+Each now has a test in `tests/test_triad42.py`:
+
+- **A sealed finding could be edited, and the verdict assigned directly.**
+  Findings and 42 gate records are now frozen, and `verdict` and
+  `verdict_reason` are read-only. To change a finding, add a new one: the old
+  one stays on the record.
+- **The 42 gate could be skipped.** `record_42` now accepts only a record that
+  `run_gate()` or `no_candidate()` produced, and only once. A caller who
+  imports the private marker in `deepthought.py` can still forge one.
+- **Gray could read Red before committing.** `rp.red` now raises while Gray's
+  independent phase is open, and `to_dict()` withholds Red's findings then.
+  `red_findings_for_gray()` ends that phase.
+
+Still open (EXECUTED 2026-11-17, not re-run here):
+
 - **Escalation is one step only through an examination.** `rp.red.add(...)`
-  accepted a hand-built finding marked as derived from three LOW findings at
-  CRITICAL, and the escalated MEDIUM finding's own severity could be raised in
-  place. Severity is the reviewer's to assign in any case; what is not held is
-  the record that a derived finding came from an examination.
-- **The 42 gate can be skipped.** `record_42` takes any gate record. One built
-  by hand as a novel insight, with no check answers, was accepted, and a second
-  call replaced the first with no trace.
-- **Gray can read Red before committing.** `rp.red.findings` is readable at any
-  time, so Red's findings were read and a phase-one observation was then
-  accepted as independent. `red_findings_for_gray()` also returns the findings
-  when Gray has recorded nothing.
+  accepts a hand-built finding marked as derived from three LOW findings at
+  CRITICAL, during Red. Severity is the reviewer's to assign in any case; what
+  is not held is the record that a derived finding came from an examination.
 
 `DECISIONS_PENDING.md` names the shape behind the three defects fixed in 2.1.0:
-a guard on the method while the object stays open. These four are the same
-shape. Closing them is a code change, not made here.
+a guard on the method while the object stays open. The open case is the same
+shape.
 
 ## What comes out
 

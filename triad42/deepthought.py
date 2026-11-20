@@ -94,15 +94,34 @@ class Candidate:
             raise IncompleteSubmission("A candidate insight requires text.")
 
 
-@dataclass
+#: Marks a record as produced by run_gate() or no_candidate(). A record built by
+#: hand does not carry it, and ReviewPass.record_42() refuses it. This stops a
+#: caller who is not trying to cheat from skipping the five checks by accident;
+#: it cannot stop one who imports this private name.
+_ISSUED = object()
+
+
+@dataclass(frozen=True)
 class GateRecord:
-    """The full record of one candidate's trip through the gate."""
+    """The full record of one candidate's trip through the gate.
+
+    Frozen: the result and the answers cannot be edited after the gate issues it.
+    """
 
     candidate: str
     result: DeepThoughtResult
-    answers: list[CheckAnswer] = field(default_factory=list)
+    answers: tuple[CheckAnswer, ...] = ()
     failed_at: Optional[Check] = None
     consequence_area: Optional[str] = None
+    _issued: object = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "answers", tuple(self.answers))
+
+    @property
+    def issued_by_gate(self) -> bool:
+        """True only for a record that run_gate() or no_candidate() produced."""
+        return self._issued is _ISSUED
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,8 +163,9 @@ def run_gate(candidate: Candidate, answers: list[CheckAnswer]) -> GateRecord:
             return GateRecord(
                 candidate=candidate.text,
                 result=DeepThoughtResult.NO_42_IDENTIFIED,
-                answers=ordered,
+                answers=tuple(ordered),
                 failed_at=check,
+                _issued=_ISSUED,
             )
 
     if is_abstraction:
@@ -162,8 +182,9 @@ def run_gate(candidate: Candidate, answers: list[CheckAnswer]) -> GateRecord:
     return GateRecord(
         candidate=candidate.text,
         result=result,
-        answers=ordered,
+        answers=tuple(ordered),
         consequence_area=candidate.consequence_area,
+        _issued=_ISSUED,
     )
 
 
@@ -172,6 +193,7 @@ def no_candidate() -> GateRecord:
     return GateRecord(
         candidate="",
         result=DeepThoughtResult.NO_42_IDENTIFIED,
-        answers=[],
+        answers=(),
         failed_at=None,
+        _issued=_ISSUED,
     )

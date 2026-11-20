@@ -84,7 +84,7 @@ class ReviewPass:
                     "input is how a recommendation becomes a premise."
                 )
 
-        self.red = FindingLedger()
+        self._red = FindingLedger()
         self._gray: list[StructuralObservation] = []
         self._cross_cutting: list[CrossCuttingObservation] = []
         self._gray_phase = 1
@@ -97,9 +97,40 @@ class ReviewPass:
         self.declared_at: Optional[str] = None
         self._stage_index = 0
         self._closed_stages: list[Stage] = []
-        self.verdict: Optional[Verdict] = None
-        self.verdict_reason: Optional[str] = None
+        self._verdict: Optional[Verdict] = None
+        self._verdict_reason: Optional[str] = None
         self.disagreement_override: Optional[str] = None
+
+    # -- read-only record ------------------------------------------------
+
+    def _red_readable(self) -> bool:
+        """Red's findings are hidden while Gray's independent phase is open."""
+        return not (self.current_stage is Stage.GRAY and self._gray_phase == 1)
+
+    @property
+    def red(self) -> FindingLedger:
+        """Red's ledger. Not readable while Gray's independent phase is open.
+
+        Gray must put its own read on the record before it sees Red's findings.
+        Ask for them with red_findings_for_gray(), which seals that phase.
+        """
+        if not self._red_readable():
+            raise StageOrderError(
+                "Red's findings cannot be read while Gray's independent phase "
+                "is open. Call red_findings_for_gray() first, which seals the "
+                "observations Gray has already made."
+            )
+        return self._red
+
+    @property
+    def verdict(self) -> Optional[Verdict]:
+        """The declared verdict. Read-only: set it only through declare()."""
+        return self._verdict
+
+    @property
+    def verdict_reason(self) -> Optional[str]:
+        """The reason given with the verdict. Read-only."""
+        return self._verdict_reason
 
     # -- stage sequencing ------------------------------------------------
 
@@ -140,8 +171,8 @@ class ReviewPass:
         if stage is None:
             raise StageOrderError("All stages are already closed.")
         if stage is Stage.RED:
-            self.red.assert_mandates_closed()
-            self.red.seal()
+            self._red.assert_mandates_closed()
+            self._red.seal()
         if stage is Stage.GRAY and self.structural_assessment is None:
             # Same shape as 42 defaulting to NO 42 IDENTIFIED: when nothing was
             # established, the honest record says so rather than staying blank.
@@ -159,11 +190,11 @@ class ReviewPass:
 
     def add_finding(self, text: str, severity: Severity, scope: str) -> Finding:
         self._require(Stage.RED)
-        return self.red.add(Finding(text=text, severity=severity, scope=scope))
+        return self._red.add(Finding(text=text, severity=severity, scope=scope))
 
     def examine_cluster(self, scope: str, severity: Severity, outcome, **kwargs):
         self._require(Stage.RED)
-        return self.red.examine(scope, severity, outcome, **kwargs)
+        return self._red.examine(scope, severity, outcome, **kwargs)
 
     def add_observation(self, observation: StructuralObservation) -> StructuralObservation:
         """Phase 1. Gray's independent read of the architecture."""
@@ -188,7 +219,7 @@ class ReviewPass:
         """
         self._require(Stage.GRAY)
         self._gray_phase = 2
-        return tuple(self.red.findings)
+        return tuple(self._red.findings)
 
     def add_cross_cutting(
         self, observation: CrossCuttingObservation
@@ -201,7 +232,7 @@ class ReviewPass:
                 "Call red_findings_for_gray() first, which seals the "
                 "independent observations you have already made."
             )
-        known = {f.finding_id: f for f in self.red.findings}
+        known = {f.finding_id: f for f in self._red.findings}
         missing = [fid for fid in observation.finding_ids if fid not in known]
         if missing:
             raise IncompleteSubmission(
@@ -234,6 +265,16 @@ class ReviewPass:
 
     def record_42(self, record: GateRecord) -> GateRecord:
         self._require(Stage.DEEP_THOUGHT)
+        if self.deep_thought is not None:
+            raise IncompleteSubmission(
+                "A 42 record is already on the pass. The record is write-once: "
+                "a second one would replace it with no trace of the first."
+            )
+        if not (isinstance(record, GateRecord) and record.issued_by_gate):
+            raise IncompleteSubmission(
+                "A 42 record must come from run_gate() or no_candidate(). A "
+                "record built by hand has not been through the five checks."
+            )
         self.deep_thought = record
         return record
 
@@ -255,7 +296,7 @@ class ReviewPass:
         and found nothing wrong" with "did not look". Gray now says which one
         it is, so the check rests on a statement rather than an absence.
         """
-        red_objects = bool(self.red.blocking_findings())
+        red_objects = bool(self._red.blocking_findings())
         gray_affirms = self.structural_assessment is StructuralAssessment.STRUCTURE_HOLDS
         green_grounded = self.green.new_grounding_count() > 0
         return red_objects and gray_affirms and green_grounded
@@ -284,12 +325,12 @@ class ReviewPass:
         if not reason.strip():
             raise IncompleteSubmission("A verdict requires a stated reason.")
 
-        blocking = self.red.blocking_findings()
+        blocking = self._red.blocking_findings()
 
         if verdict is Verdict.FAILS and not blocking:
             raise InadmissibleVerdict(
                 "FAILS may rest only on CRITICAL or HIGH findings. The record "
-                f"holds {len(self.red.findings)} finding(s), none blocking. "
+                f"holds {len(self._red.findings)} finding(s), none blocking. "
                 "Volume does not aggregate into failure."
             )
 
@@ -299,7 +340,7 @@ class ReviewPass:
                 f"Blocking findings remain on the record: {ids}."
             )
 
-        if self.red.routed_to_human() and verdict is not Verdict.REQUIRES_HUMAN_DECISION:
+        if self._red.routed_to_human() and verdict is not Verdict.REQUIRES_HUMAN_DECISION:
             raise InadmissibleVerdict(
                 "A cluster examination returned REQUIRES HUMAN DECISION. That "
                 "result cannot be absorbed into another verdict."
@@ -315,8 +356,8 @@ class ReviewPass:
                 )
             self.disagreement_override = disagreement_override
 
-        self.verdict = verdict
-        self.verdict_reason = reason
+        self._verdict = verdict
+        self._verdict_reason = reason
         self.declared_at = utcnow()
         return verdict
 
@@ -329,7 +370,7 @@ class ReviewPass:
         recommendation. Nothing produced here is ever a fact or a decision.
         """
         out: list[LabeledItem] = []
-        for f in self.red.findings:
+        for f in self._red.findings:
             out.append(
                 LabeledItem(
                     text=f.text, label=Label.INFERENCE, origin_pass=self.pass_id
@@ -351,7 +392,7 @@ class ReviewPass:
             "subject": self.subject.to_dict(),
             "inputs": [i.to_dict() for i in self.inputs],
             "stages_closed": [s.value for s in self._closed_stages],
-            "red": self.red.to_dict(),
+            "red": self._red.to_dict() if self._red_readable() else {"withheld": "Gray's independent phase is open"},
             "gray": [o.to_dict() for o in self._gray],
             "gray_phase": self._gray_phase,
             "cross_cutting": [o.to_dict() for o in self._cross_cutting],
